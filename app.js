@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.3.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -24,10 +24,18 @@ const CHECKLIST = [
   { id: '5', title: 'A/C Exterior Inspection', folder: '5 AC Exterior Inspection', children: [
     { id: '5.1', title: 'Exterior – A/C General Condition', folder: '5.1 Exterior - AC General Condition' },
     { id: '5.2', title: 'Exterior – Structures Condition', folder: '5.2 Exterior - Structures Condition' },
-    { id: '5.3', title: 'Exterior – Engine Condition', folder: '5.3 Exterior - Engine Condition' },
-    { id: '5.4', title: 'Exterior – Landing Gears Condition', folder: '5.4 Exterior - Landing Gears Condition' },
+    { id: '5.3', title: 'Exterior – Engine Condition', folder: '5.3 Exterior - Engine Condition', children: [
+      { id: '5.3.1', title: 'Engine #1', folder: '5.3.1 Engine 1' },
+      { id: '5.3.2', title: 'Engine #2', folder: '5.3.2 Engine 2' },
+      { id: '5.3.3', title: 'APU', folder: '5.3.3 APU' } ] },
+    { id: '5.4', title: 'Exterior – Landing Gears Condition', folder: '5.4 Exterior - Landing Gears Condition', children: [
+      { id: '5.4.1', title: 'NLG', folder: '5.4.1 NLG' },
+      { id: '5.4.2', title: 'MLG LH', folder: '5.4.2 MLG LH' },
+      { id: '5.4.3', title: 'MLG RH', folder: '5.4.3 MLG RH' } ] },
     { id: '5.5', title: 'Exterior – Doors / Panels', folder: '5.5 Exterior - Doors - Panels' },
-    { id: '5.6', title: 'Exterior – Cargo Compartment', folder: '5.6 Exterior - Cargo Compartment' },
+    { id: '5.6', title: 'Exterior – Cargo Compartment', folder: '5.6 Exterior - Cargo Compartment', children: [
+      { id: '5.6.1', title: 'FWD Cargo', folder: '5.6.1 FWD Cargo' },
+      { id: '5.6.2', title: 'AFT Cargo', folder: '5.6.2 AFT Cargo' } ] },
     { id: '5.7', title: 'Exterior – Avionics Bay', folder: '5.7 Exterior - Avionics Bay' } ] },
   { id: '6', title: 'A/C Physical Compliance with Records', folder: '6 AC Physical Compliance with Records' },
 ];
@@ -94,16 +102,17 @@ let cur = null; // { s, findings, photos }
 let capture = null, fFilter = 'all', exportReady = null, viewer = null;
 const thumbURLs = new Map();
 
-function leaves(s) {
-  const out = [];
-  for (const g of s.checklist) {
-    if (g.children) for (const c of g.children) out.push({ ...c, group: g });
-    else out.push({ ...g, group: null });
+// Beliebig tiefe Verschachtelung: nur Knoten ohne `children` sind prüfbare Punkte
+function walk(nodes, parents = [], out = []) {
+  for (const n of nodes) {
+    if (n.children) walk(n.children, [...parents, n], out);
+    else out.push({ ...n, parents, group: parents[0] || null });
   }
   return out;
 }
+const leaves = s => walk(s.checklist);
 const leafById = (s, id) => leaves(s).find(l => l.id === id);
-const leafPath = l => l.group ? `${l.group.folder}/${l.folder}` : l.folder;
+const leafPath = l => [...(l.parents || []).map(p => p.folder), l.folder].join('/');
 const itemState = (s, id) => (s.items[id] ||= { status: 'open', reason: '', note: '' });
 
 function evalItem(c, l) {
@@ -222,7 +231,7 @@ async function addPhotos(files, ctx) {
 }
 async function deletePhotos(list) {
   const c = cur; if (!c) return;
-  await tx(['photos', 'blobs'], 'readwrite', t => { for (const p of list) { t.objectStore('photos').delete(p.id); t.objectStore('blobs').delete(p.id); } });
+  await tx(['photos', 'blobs'], 'readwrite', t => { for (const p of list) { t.objectStore('photos').delete(p.id); t.objectStore('blobs').delete(p.id); t.objectStore('blobs').delete(p.id + '#ann'); } });
   const ids = new Set(list.map(p => p.id));
   c.photos = c.photos.filter(p => !ids.has(p.id));
   for (const id of ids) { const u = thumbURLs.get(id); if (u) { URL.revokeObjectURL(u); thumbURLs.delete(id); } }
@@ -263,9 +272,9 @@ function stIcon(e) {
   if (e.state === 'warn') return ['warn', '!'];
   return ['open', ''];
 }
-function itemRow(c, l) {
+function itemRow(c, l, sub) {
   const e = evalItem(c, l), [cls, ic] = stIcon(e);
-  return `<a class="row" href="#/s/${c.s.id}/i/${l.id}"><span class="st ${cls}">${ic}</span>
+  return `<a class="row${sub ? ' sub' : ''}" href="#/s/${c.s.id}/i/${l.id}"><span class="st ${cls}">${ic}</span>
   <span class="row-t"><span class="row-id">${esc(l.id)}</span> ${esc(l.title)}</span>
   <span class="row-m">${e.n ? `<span class="chip">📷 ${e.n}</span>` : ''}${e.fnd.length ? `<span class="chip fnd">⚠ ${e.fnd.length}</span>` : ''}</span><span class="chev">›</span></a>`;
 }
@@ -302,14 +311,17 @@ async function viewHome() {
 function viewSession(c) {
   let h = topbar(c.s.reg, sessSub(c.s), '#/', `<button class="tb-btn" data-act="editSession" aria-label="Bearbeiten">✎</button>`);
   h += tabs(c, 'list') + `<main class="wrap">` + progressBox(c);
+  const cnt = L => `${L.filter(l => evalItem(c, l).state === 'done').length}/${L.length}`;
   for (const g of c.s.checklist) {
-    if (g.children) {
-      const L = g.children.map(ch => ({ ...ch, group: g }));
-      const d = L.filter(l => evalItem(c, l).state === 'done').length;
-      h += `<div class="ghead"><span>${esc(g.id)} ${esc(g.title)}</span><span>${d}/${L.length}</span></div><div class="card">${L.map(l => itemRow(c, l)).join('')}</div>`;
-    } else {
-      h += `<div class="ghead"><span></span></div><div class="card">${itemRow(c, { ...g, group: null })}</div>`;
+    if (!g.children) { h += `<div class="ghead"><span></span></div><div class="card">${itemRow(c, { ...g, parents: [], group: null })}</div>`; continue; }
+    h += `<div class="ghead"><span>${esc(g.id)} ${esc(g.title)}</span><span>${cnt(walk(g.children, [g]))}</span></div><div class="card">`;
+    for (const ch of g.children) {
+      if (ch.children) {
+        const L = walk(ch.children, [g, ch]);
+        h += `<div class="subhead"><span>${esc(ch.id)} ${esc(ch.title)}</span><span>${cnt(L)}</span></div>${L.map(l => itemRow(c, l, true)).join('')}`;
+      } else h += itemRow(c, { ...ch, parents: [g], group: g });
     }
+    h += '</div>';
   }
   return h + '</main>';
 }
@@ -318,7 +330,7 @@ function viewItem(c, id) {
   if (i < 0) return notFound(c);
   const l = L[i], e = evalItem(c, l), st = e.st, base = `#/s/${c.s.id}`;
   const prev = L[i - 1], next = L[i + 1];
-  let h = topbar(`${l.id} ${l.title}`, `${c.s.reg}${l.group ? ' · ' + l.group.title : ''}`, base);
+  let h = topbar(`${l.id} ${l.title}`, `${c.s.reg}${l.parents.length ? ' · ' + l.parents[l.parents.length - 1].title : ''}`, base);
   h += `<main class="wrap has-bbar"><div class="card pad"><div class="lbl">Status</div><div class="seg">
   ${[['open', 'Offen'], ['ok', 'Geprüft'], ['na', 'N/A']].map(([v, t]) => `<button data-act="setStatus" data-item="${l.id}" data-v="${v}" class="${st.status === v ? 'on ' + v : ''}">${t}</button>`).join('')}</div>
   ${st.status === 'na' ? `<div class="lbl">Begründung N/A</div><input class="inp" data-field="naReason" data-id="${l.id}" value="${esc(st.reason)}" placeholder="Pflichtfeld">` : ''}
@@ -487,11 +499,11 @@ async function settingsSheet() {
 }
 
 /* Foto-Viewer */
-async function openViewer(pid, ctx) {
+async function openViewer(pid, ctx, orig = false) {
   const p = cur?.photos.find(x => x.id === pid); if (!p) return;
-  const b = await get('blobs', pid);
+  const b = await get('blobs', p.annotated && !orig ? pid + '#ann' : pid);
   if (viewer?.url) URL.revokeObjectURL(viewer.url);
-  viewer = { pid, ctx, url: b ? URL.createObjectURL(new Blob([b.buf], { type: b.type })) : '' };
+  viewer = { pid, ctx, orig, url: b ? URL.createObjectURL(new Blob([b.buf], { type: b.type })) : '' };
   document.body.classList.add('noscroll');
   renderViewer();
 }
@@ -504,11 +516,13 @@ function renderViewer() {
   if (!p) return closeViewer();
   const list = viewerList(), i = list.findIndex(x => x.id === p.id), el = $('#viewer');
   el.innerHTML = `<div class="v-top"><button class="v-btn" data-act="vClose" aria-label="Schließen">✕</button>
-  <span class="v-info">${i + 1} / ${list.length} · ${esc(p.itemId)} · ${fmtDT(p.createdAt)}</span>
+  <span class="v-info">${i + 1}/${list.length}</span>
+  ${p.annotated ? `<button class="v-btn txt" data-act="vOrig">${viewer.orig ? 'Markiert' : 'Original'}</button>` : ''}
+  <button class="v-btn txt mark" data-act="vEdit">✏︎ Markieren</button>
   <button class="v-btn" data-act="vDel" aria-label="Löschen">🗑</button></div>
   <div class="v-img">${viewer.url ? `<img src="${viewer.url}" alt="">` : '<span>Bild nicht lesbar</span>'}
   ${i > 0 ? '<button class="v-nav l" data-act="vPrev">‹</button>' : ''}${i < list.length - 1 ? '<button class="v-nav r" data-act="vNext">›</button>' : ''}</div>
-  <div class="v-panel"><label>Prüfpunkt</label>${itemSelect(c.s, p.itemId, 'vItem')}
+  <div class="v-panel"><div class="v-meta">${fmtDT(p.createdAt)}${p.annotated ? (viewer.orig ? ' · Original' : ' · markierte Kopie') : ''}</div><label>Prüfpunkt</label>${itemSelect(c.s, p.itemId, 'vItem')}
   <label>Finding</label><select class="inp" data-field="vFinding"><option value="">– kein Finding (Nachweisfoto) –</option>
   ${[...c.findings].sort((a, b) => a.num - b.num).map(f => `<option value="${f.id}" ${p.findingId === f.id ? 'selected' : ''}>${fNo(f)} · ${esc(f.itemId)} ${esc((f.text || '').slice(0, 30))}</option>`).join('')}
   <option value="__new">+ Neues Finding aus diesem Foto</option></select>
@@ -525,12 +539,138 @@ async function viewerStep(d) {
   if (n) await openViewer(n.id, viewer.ctx);
 }
 
+/* ---------------- Markieren ----------------
+   Original bleibt unverändert (Beweiswert). Markierungen werden als
+   Vektoren (normierte Koordinaten 0..1) gespeichert -> jederzeit
+   nachbearbeitbar. Zusätzlich wird eine markierte JPEG-Kopie erzeugt. */
+let ed = null, edTool = 'circle', edColor = '#ff1f1f';
+const ED_W = 0.008; // Strichstärke relativ zur längeren Bildkante
+
+function drawShapes(ctx, shapes, W, H) {
+  const m = Math.max(W, H);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const s of shapes) {
+    ctx.strokeStyle = s.c; ctx.lineWidth = s.w * m; ctx.beginPath();
+    if (s.t === 'circle') {
+      const [x1, y1, x2, y2] = s.p;
+      ctx.ellipse((x1 + x2) / 2 * W, (y1 + y2) / 2 * H, Math.max(1, Math.abs(x2 - x1) / 2 * W), Math.max(1, Math.abs(y2 - y1) / 2 * H), 0, 0, Math.PI * 2);
+    } else if (s.t === 'arrow') {
+      const x1 = s.p[0] * W, y1 = s.p[1] * H, x2 = s.p[2] * W, y2 = s.p[3] * H;
+      const a = Math.atan2(y2 - y1, x2 - x1), L = s.w * m * 4;
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.moveTo(x2 - L * Math.cos(a - 0.45), y2 - L * Math.sin(a - 0.45)); ctx.lineTo(x2, y2);
+      ctx.lineTo(x2 - L * Math.cos(a + 0.45), y2 - L * Math.sin(a + 0.45));
+    } else {
+      for (let i = 0; i < s.p.length; i += 2) { const x = s.p[i] * W, y = s.p[i + 1] * H; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    }
+    ctx.stroke();
+  }
+}
+async function openEditor(pid) {
+  const p = cur.photos.find(x => x.id === pid);
+  const b = await get('blobs', pid);
+  if (!b) { toast('Original nicht lesbar'); return; }
+  const url = URL.createObjectURL(new Blob([b.buf], { type: b.type })), img = new Image(); img.src = url;
+  try { await img.decode(); } catch { URL.revokeObjectURL(url); toast('Dieses Bildformat kann nicht markiert werden'); return; }
+  $('#toast').hidden = true;
+  ed = { p, img, url, shapes: JSON.parse(JSON.stringify(p.shapes || [])), drawing: null };
+  const el = $('#editor');
+  el.innerHTML = `<div class="v-top"><button class="v-btn" data-act="edCancel" aria-label="Abbrechen">✕</button>
+  <span class="v-info">Markieren · ${esc(p.itemId)}</span><button class="btn pri" data-act="edSave">Speichern</button></div>
+  <div class="ed-wrap"><canvas id="edCv"></canvas></div><div class="ed-bar" id="edBar"></div>`;
+  el.hidden = false;
+  const cv = $('#edCv');
+  cv.addEventListener('pointerdown', edDown); cv.addEventListener('pointermove', edMove);
+  cv.addEventListener('pointerup', edUp); cv.addEventListener('pointercancel', edUp);
+  edBar(); edLayout();
+}
+function edBar() {
+  const tools = [['circle', '◯ Kreis'], ['arrow', '➚ Pfeil'], ['free', '✎ Frei']];
+  const cols = ['#ff1f1f', '#ffd400', '#ffffff'];
+  $('#edBar').innerHTML = tools.map(([v, t]) => `<button class="ed-b ${edTool === v ? 'on' : ''}" data-act="edTool" data-v="${v}">${t}</button>`).join('')
+    + cols.map(c => `<button class="ed-c ${edColor === c ? 'on' : ''}" style="background:${c}" data-act="edColor" data-v="${c}" aria-label="Farbe"></button>`).join('')
+    + `<span class="grow"></span><button class="ed-b" data-act="edUndo" ${ed.shapes.length ? '' : 'disabled'}>↶</button>
+    <button class="ed-b" data-act="edClear" ${ed.shapes.length ? '' : 'disabled'}>Alle</button>`;
+}
+function edLayout() {
+  if (!ed) return;
+  const cv = $('#edCv'), wrap = cv.parentElement, dpr = window.devicePixelRatio || 1;
+  const W = wrap.clientWidth, H = wrap.clientHeight, iw = ed.img.naturalWidth, ih = ed.img.naturalHeight;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  const k = Math.min(W / iw, H / ih);
+  ed.box = { x: (W - iw * k) / 2, y: (H - ih * k) / 2, w: iw * k, h: ih * k, dpr };
+  edDraw();
+}
+function edDraw() {
+  const cv = $('#edCv'), ctx = cv.getContext('2d'), b = ed.box;
+  ctx.setTransform(b.dpr, 0, 0, b.dpr, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(ed.img, b.x, b.y, b.w, b.h);
+  ctx.save(); ctx.translate(b.x, b.y);
+  drawShapes(ctx, ed.drawing ? [...ed.shapes, ed.drawing] : ed.shapes, b.w, b.h);
+  ctx.restore();
+}
+function edPt(e) {
+  const r = e.currentTarget.getBoundingClientRect(), b = ed.box, cl = v => Math.min(1, Math.max(0, v));
+  return [cl((e.clientX - r.left - b.x) / b.w), cl((e.clientY - r.top - b.y) / b.h)];
+}
+function edDown(e) {
+  e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId);
+  const [x, y] = edPt(e);
+  ed.drawing = { t: edTool, c: edColor, w: ED_W, p: edTool === 'free' ? [x, y] : [x, y, x, y] };
+}
+function edMove(e) {
+  if (!ed?.drawing) return;
+  const [x, y] = edPt(e), d = ed.drawing;
+  if (d.t === 'free') d.p.push(x, y); else { d.p[2] = x; d.p[3] = y; }
+  edDraw();
+}
+function edUp() {
+  const d = ed?.drawing; if (!d) return; ed.drawing = null;
+  const big = d.t === 'free' ? d.p.length > 4 : Math.hypot(d.p[2] - d.p[0], d.p[3] - d.p[1]) > 0.015;
+  if (big) ed.shapes.push(d);
+  edDraw(); edBar();
+}
+async function makeThumb(img, shapes) {
+  const k = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight));
+  const cv = document.createElement('canvas'); cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+  const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  if (shapes.length) drawShapes(ctx, shapes, cv.width, cv.height);
+  const buf = await (await toBlob(cv, 0.72)).arrayBuffer(); cv.width = cv.height = 0;
+  return buf;
+}
+async function edSave() {
+  const { p, img, shapes } = ed;
+  busy('Markierung wird gespeichert …');
+  try {
+    if (shapes.length) {
+      const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      const ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0); drawShapes(ctx, shapes, cv.width, cv.height);
+      const full = await (await toBlob(cv, 0.9)).arrayBuffer(); cv.width = cv.height = 0;
+      p.thumb = await makeThumb(img, shapes); p.shapes = shapes; p.annotated = true;
+      await tx(['photos', 'blobs'], 'readwrite', t => { t.objectStore('photos').put(p); t.objectStore('blobs').put({ id: p.id + '#ann', buf: full, type: 'image/jpeg' }); });
+    } else {
+      p.thumb = await makeThumb(img, []); p.shapes = []; p.annotated = false;
+      await tx(['photos', 'blobs'], 'readwrite', t => { t.objectStore('photos').put(p); t.objectStore('blobs').delete(p.id + '#ann'); });
+    }
+    const u = thumbURLs.get(p.id); if (u) { URL.revokeObjectURL(u); thumbURLs.delete(p.id); }
+    await touch();
+  } catch (err) { console.error(err); toast('Speichern fehlgeschlagen: ' + err.message); }
+  finally { busy(false); }
+  const ctx = viewer?.ctx; closeEditor();
+  if (ctx) await openViewer(p.id, ctx);
+}
+function closeEditor() {
+  const el = $('#editor'); el.hidden = true; el.innerHTML = '';
+  if (ed?.url) URL.revokeObjectURL(ed.url); ed = null;
+}
+window.addEventListener('resize', () => setTimeout(edLayout, 100));
+
 /* ---------------- Export ---------------- */
 function csvCell(v) { const s = String(v ?? ''); return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
 const findingFolder = f => safeName(`${fNo(f)}_${f.itemId}_${f.wo?.trim() ? 'WO' + f.wo.trim() : 'ohne-WO'}`);
 const encPath = p => p.split('/').map(encodeURIComponent).join('/');
 
-function protocolHTML(c, names) {
+function protocolHTML(c, names, annNames) {
   const s = c.s, L = leaves(s), iss = checkIssues(c), stl = { open: 'offen', ok: 'geprüft', na: 'N/A' };
   const rows = L.map(l => {
     const e = evalItem(c, l);
@@ -539,7 +679,7 @@ function protocolHTML(c, names) {
   }).join('');
   const fs = [...c.findings].sort((a, b) => a.num - b.num);
   const frows = fs.map(f => `<tr><td>${fNo(f)}</td><td>${esc(f.itemId)}</td><td>${esc(f.text)}</td><td>${esc(f.wo)}</td><td>${f.rectified ? 'ja' : 'nein'}</td><td>${esc(f.rect)}</td><td>${c.photos.filter(p => p.findingId === f.id).length}</td></tr>`).join('');
-  const fig = p => `<figure><a href="${encPath(names.get(p.id))}"><img src="${encPath(names.get(p.id))}" loading="lazy"></a><figcaption>${esc(names.get(p.id).split('/').pop())} · ${fmtDT(p.createdAt)}${p.findingId ? ' · ' + fNo(c.findings.find(f => f.id === p.findingId) || { num: 0 }) : ''}${p.note ? ' · ' + esc(p.note) : ''}</figcaption></figure>`;
+  const fig = p => `<figure><a href="${encPath(annNames.get(p.id) || names.get(p.id))}"><img src="${encPath(annNames.get(p.id) || names.get(p.id))}" loading="lazy"></a><figcaption>${esc(names.get(p.id).split('/').pop())} · ${fmtDT(p.createdAt)}${p.findingId ? ' · ' + fNo(c.findings.find(f => f.id === p.findingId) || { num: 0 }) : ''}${p.note ? ' · ' + esc(p.note) : ''}</figcaption></figure>`;
   const gal = L.map(l => { const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated); return ph.length ? `<h3>${esc(l.id)} ${esc(l.title)}</h3><div class="g">${ph.map(fig).join('')}</div>` : ''; }).join('');
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prüfprotokoll ${esc(s.reg)} ${esc(fmtDay(s.date))}</title>
 <style>body{font:13px/1.4 -apple-system,Segoe UI,Arial,sans-serif;margin:24px;color:#111}h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px;border-bottom:2px solid #111}h3{font-size:14px;margin:16px 0 6px}
@@ -566,7 +706,7 @@ async function buildZip() {
   const root = safeName(`${s.date}_${s.reg}_ARC-Physical`);
   const zip = new JSZip(), R = zip.folder(root), L = leaves(s);
   for (const l of L) R.folder(leafPath(l)); // vollständige Ordnerstruktur, auch leere
-  const photos = [...c.photos].sort(byCreated), names = new Map(), cnt = {};
+  const photos = [...c.photos].sort(byCreated), names = new Map(), annNames = new Map(), cnt = {};
   busy('Fotos werden gesammelt …');
   try {
     for (const p of photos) {
@@ -574,21 +714,25 @@ async function buildZip() {
       let path;
       if (f) { const fn = findingFolder(f); cnt[fn] = (cnt[fn] || 0) + 1; path = `Findings/${fn}/${fn}_${pad(cnt[fn])}.${ext}`; }
       else {
-        const l = L.find(x => x.id === p.itemId) || { id: p.itemId, folder: 'Unzugeordnet', group: null };
+        const l = L.find(x => x.id === p.itemId) || { id: p.itemId, folder: 'Unzugeordnet', parents: [] };
         cnt[l.id] = (cnt[l.id] || 0) + 1; path = `${leafPath(l)}/${l.id}_${pad(cnt[l.id], 3)}.${ext}`;
       }
       names.set(p.id, path);
       const b = await get('blobs', p.id);
       if (b) R.file(path, b.buf, { binary: true, date: new Date(p.createdAt) });
+      if (p.annotated) { // markierte Kopie zusätzlich, Original bleibt unverändert
+        const a = await get('blobs', p.id + '#ann');
+        if (a) { const ap = path.replace(/\.[^.]+$/, '_markiert.jpg'); annNames.set(p.id, ap); R.file(ap, a.buf, { binary: true, date: new Date(p.createdAt) }); }
+      }
     }
     const fs = [...c.findings].sort((a, b) => a.num - b.num);
     const head = ['Finding', 'Prüfpunkt', 'Bezeichnung', 'Beschreibung (Physical)', 'WO-Nr.', 'Rectified', 'Rectification', 'Anzahl Fotos', 'Ordner', 'Erfasst am', 'Wortlaut WO (manuell)'];
     const rows = fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'ja' : 'nein', f.rect,
       c.photos.filter(p => p.findingId === f.id).length, 'Findings/' + findingFolder(f), fmtDT(f.createdAt), '']);
     R.file('Findings.csv', '﻿' + [head, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n'));
-    R.file('Pruefprotokoll.html', protocolHTML(c, names));
+    R.file('Pruefprotokoll.html', protocolHTML(c, names, annNames));
     R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, exportedAt: builtAt, session: s, findings: fs,
-      photos: photos.map(p => ({ id: p.id, itemId: p.itemId, findingId: p.findingId, createdAt: p.createdAt, note: p.note, file: names.get(p.id) })) }, null, 1));
+      photos: photos.map(p => ({ id: p.id, itemId: p.itemId, findingId: p.findingId, createdAt: p.createdAt, note: p.note, file: names.get(p.id), annotatedFile: annNames.get(p.id) || null })) }, null, 1));
     const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true }, m => busy(`ZIP wird erstellt … ${Math.round(m.percent)} %`));
     if (exportReady?.url) URL.revokeObjectURL(exportReady.url);
     exportReady = { sid: s.id, blob, name: root + '.zip', url: URL.createObjectURL(blob), builtAt };
@@ -617,7 +761,7 @@ async function deleteSession() {
   await tx(['sessions', 'findings', 'photos', 'blobs'], 'readwrite', t => {
     t.objectStore('sessions').delete(c.s.id);
     for (const f of c.findings) t.objectStore('findings').delete(f.id);
-    for (const p of c.photos) { t.objectStore('photos').delete(p.id); t.objectStore('blobs').delete(p.id); }
+    for (const p of c.photos) { t.objectStore('photos').delete(p.id); t.objectStore('blobs').delete(p.id); t.objectStore('blobs').delete(p.id + '#ann'); }
   });
   revokeThumbs(); cur = null; exportReady = null; location.hash = '#/';
 }
@@ -670,6 +814,14 @@ document.addEventListener('click', async e => {
         await deleteSession(); break;
       }
       case 'vClose': closeViewer(); break;
+      case 'vOrig': await openViewer(viewer.pid, viewer.ctx, !viewer.orig); break;
+      case 'vEdit': await openEditor(viewer.pid); break;
+      case 'edTool': edTool = d.v; edBar(); break;
+      case 'edColor': edColor = d.v; edBar(); break;
+      case 'edUndo': ed.shapes.pop(); edDraw(); edBar(); break;
+      case 'edClear': ed.shapes = []; edDraw(); edBar(); break;
+      case 'edCancel': closeEditor(); break;
+      case 'edSave': await edSave(); break;
       case 'vPrev': await viewerStep(-1); break;
       case 'vNext': await viewerStep(1); break;
       case 'vDel': {
@@ -737,7 +889,7 @@ $('#viewer').addEventListener('touchend', e => {
   if (Math.abs(dx) > 60) viewerStep(dx < 0 ? 1 : -1);
 }, { passive: true });
 
-window.addEventListener('hashchange', async () => { await flush(); if (viewer) { const el = $('#viewer'); el.hidden = true; el.innerHTML = ''; if (viewer.url) URL.revokeObjectURL(viewer.url); viewer = null; document.body.classList.remove('noscroll'); } closeSheet(); render(); });
+window.addEventListener('hashchange', async () => { await flush(); closeEditor(); if (viewer) { const el = $('#viewer'); el.hidden = true; el.innerHTML = ''; if (viewer.url) URL.revokeObjectURL(viewer.url); viewer = null; document.body.classList.remove('noscroll'); } closeSheet(); render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
