@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.4.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -13,7 +13,7 @@ const CHECKLIST = [
   { id: '1', title: 'A/C Placards & Markings', folder: '1 AC Placards & Markings', children: [
     { id: '1.1', title: 'Registration', folder: '1.1 Registration' },
     { id: '1.2', title: 'National Flag', folder: '1.2 National Flag' },
-    { id: '1.3', title: 'Lease- / Owner Plate + Manufacture Plate', folder: '1.3 Lease- Owner Plate + Manufacture Plate' },
+    { id: '1.3', title: 'Lease- / Owner Plate + Manufacture Plate', folder: '1.3 Lease- Owner Plate + Manufacture Plate', minPhotos: 2 },
     { id: '1.4', title: 'Samples', folder: '1.4 Samples' } ] },
   { id: '2', title: 'A/C Documentation', folder: '2 AC Documentation', children: [
     { id: '2.1', title: 'A/C Compliance with AFM', folder: '2.1 AC Compliance with AFM' },
