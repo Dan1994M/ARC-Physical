@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.6';
+const APP_VERSION = '0.5.7';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -31,7 +31,9 @@ const CHECKLIST = [
       { id: '3.2.1', name: 'Exterior Lights Check', optional: true }, { id: '3.2.2', name: 'Flaps - Slats - Spoiler Check', optional: true },
       { id: '3.2.3', name: 'Cockpit Video System Check', optional: true }, { id: '3.2.4', name: 'Flight Control Check', optional: true } ] } ] },
   { id: '4', title: 'A/C Interior Inspection', folder: '4 AC Interior Inspection', children: [
-    { id: '4.1', title: 'Interior – Emergency Equipment (Cockpit & Cabin)', folder: '4.1 Interior - Emergency Equipment (Cockpit & Cabin)' },
+    { id: '4.1', title: 'Interior – Emergency Equipment (Cockpit & Cabin)', folder: '4.1 Interior - Emergency Equipment (Cockpit & Cabin)', docs: [
+      { id: '4.1.1', name: 'Cockpit Emergency Equipment' }, { id: '4.1.2', name: 'Cabin Emergency Equipment' },
+      { id: '4.1.3', name: 'Emergency Light Check', optional: true } ] },
     { id: '4.2', title: 'Interior – Cockpit', folder: '4.2 Interior - Cockpit' },
     { id: '4.3', title: 'Interior – Cabin', folder: '4.3 Interior - Cabin' } ] },
   { id: '5', title: 'A/C Exterior Inspection', folder: '5 AC Exterior Inspection', children: [
