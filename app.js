@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.9';
+const APP_VERSION = '0.6.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -61,29 +61,29 @@ const CHECKLIST = [
    Einfach Zeilen ergänzen/ändern; Key = Prüfpunkt-ID. */
 const HINTS = {
   '4.2': [
-    'Windshields & Side Windows – Delamination, Kratzer, Risse, Heizung',
-    'Seats incl. Observer – Verstellung, Harnesses/Gurtschlösser, Bezüge',
-    'Lights – Panel-/Flood-/Dome-/Map Lights, Annunciator Test',
-    'Placards & Markings – vorhanden, lesbar, korrekt (Compass Card, Limitations, INOP ↔ MEL/Techlog)',
-    'Zusätzlich: Panels/Displays, Crew Oxygen Masks, gezogene CBs ↔ Techlog, Cockpit Door',
+    'Windshields & Side Windows – delamination, scratches, cracks, heating',
+    'Seats incl. Observer – adjustment, harnesses/buckles, covers',
+    'Lights – panel/flood/dome/map lights, annunciator test',
+    'Placards & Markings – present, legible, correct (compass card, limitations, INOP ↔ MEL/techlog)',
+    'Additionally: panels/displays, crew oxygen masks, pulled CBs ↔ techlog, cockpit door',
   ],
   '4.3': [
-    'Furniture general (e.g. bins, side walls, windscreens, floor area) – Beschädigungen, Bin-Verriegelung, lose Teile, Carpets',
-    'Windows – Kratzer, Risse, Shades',
-    'Passenger Seats (incl. seat belts, tables, armrests, seat pocket) – Recline, Life Vest unter Sitz',
-    'Attendant Seats – Rückholung, Harness',
-    'Lights – Cabin Lights, Reading Lights, Exit Signs, Floor Path Marking',
-    'Galley function / condition – Latches, Trolley Stops, Inserts, Wasser/Abfluss',
-    'Lavatories function / condition – Smoke Detector, Waste Bin Flap, Ashtray',
-    'Placards & Markings – No Smoking/Fasten Seatbelt, Row-/Bin-/Exit-Placards',
-    'Zusätzlich: PSU/Oxygen-Box-Klappen, Doors/Slides armed-Anzeige, Assist Handles',
+    'Furniture general (e.g. bins, side walls, windscreens, floor area) – damage, bin latches, loose parts, carpets',
+    'Windows – scratches, cracks, shades',
+    'Passenger Seats (incl. seat belts, tables, armrests, seat pocket) – recline, life vest under seat',
+    'Attendant Seats – auto-retract, harness',
+    'Lights – cabin lights, reading lights, exit signs, floor path marking',
+    'Galley function / condition – latches, trolley stops, inserts, water/drain',
+    'Lavatories function / condition – smoke detector, waste bin flap, ashtray',
+    'Placards & Markings – no smoking/fasten seatbelt, row/bin/exit placards',
+    'Additionally: PSU/oxygen box doors, doors/slide armed indication, assist handles',
   ],
 };
 
 const QUALITY = {
-  original: { label: 'Original (volle Auflösung, groß)', max: 0 },
-  high:     { label: 'Hoch – max. 3000 px (empfohlen)', max: 3000, q: 0.88 },
-  medium:   { label: 'Mittel – max. 2000 px', max: 2000, q: 0.85 },
+  original: { label: 'Original (full resolution, large) – default', max: 0 },
+  high:     { label: 'High – max. 3000 px', max: 3000, q: 0.88 },
+  medium:   { label: 'Medium – max. 2000 px', max: 2000, q: 0.85 },
 };
 
 /* ---------------- Utils ---------------- */
@@ -101,7 +101,7 @@ const byCreated = (a, b) => a.createdAt.localeCompare(b.createdAt);
 const extOf = t => ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/heif': 'heif', 'image/webp': 'webp' }[t] || 'jpg');
 const fNo = f => 'F' + pad(f.num);
 
-const settings = { quality: 'high' };
+const settings = { quality: 'original' };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('arc-settings') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('arc-settings', JSON.stringify(settings)); } catch {} };
 
@@ -281,7 +281,7 @@ async function addPhotos(files, ctx) {
   const c = cur; if (!c) return;
   let fid = ctx.fid;
   if (ctx.newFinding) fid = (await createFinding(ctx.item)).id;
-  if (files.length > 1) busy(`${files.length} Fotos werden gespeichert …`);
+  if (files.length > 1) busy(`Saving ${files.length} photos …`);
   const added = [];
   try {
     for (const file of files) {
@@ -300,7 +300,7 @@ async function addPhotos(files, ctx) {
   if (ctx.newFinding) { location.hash = `#/s/${c.s.id}/f/${fid}`; return; }
   render();
   const n = c.photos.filter(p => p.itemId === ctx.item).length;
-  toast(`${added.length > 1 ? added.length + ' Fotos' : 'Foto'} gespeichert · ${ctx.doc || ctx.item} (${ctx.doc ? c.photos.filter(p => p.docId === ctx.doc).length : n})`, 'Rückgängig', () => deletePhotos(added));
+  toast(`${added.length > 1 ? added.length + ' photos' : 'Photo'} saved · ${ctx.doc || ctx.item} (${ctx.doc ? c.photos.filter(p => p.docId === ctx.doc).length : n})`, 'Undo', () => deletePhotos(added));
 }
 async function deletePhotos(list) {
   const c = cur; if (!c) return;
@@ -322,20 +322,20 @@ async function savePhotoMetas(list) { await tx(['photos'], 'readwrite', t => { f
 /* ---------------- UI-Bausteine ---------------- */
 const app = $('#app');
 function topbar(title, sub, back, right = '') {
-  const b = back === 'history' ? `<button class="tb-back" data-act="back" aria-label="Zurück">‹</button>`
-    : back ? `<a class="tb-back" href="${back}" aria-label="Zurück">‹</a>` : '<span class="tb-sp"></span>';
+  const b = back === 'history' ? `<button class="tb-back" data-act="back" aria-label="Back">‹</button>`
+    : back ? `<a class="tb-back" href="${back}" aria-label="Back">‹</a>` : '<span class="tb-sp"></span>';
   return `<header class="top">${b}<div class="tb-t"><div class="tb-title">${esc(title)}</div>${sub ? `<div class="tb-sub">${esc(sub)}</div>` : ''}</div>${right || '<span class="tb-sp"></span>'}</header>`;
 }
 const sessSub = s => [s.msn && 'MSN ' + s.msn, s.type, fmtDay(s.date)].filter(Boolean).join(' · ');
 function tabs(c, active) {
   const b = `#/s/${c.s.id}`, iss = checkIssues(c);
-  return `<nav class="tabs"><a href="${b}" class="${active === 'list' ? 'on' : ''}">Prüfliste</a>
+  return `<nav class="tabs"><a href="${b}" class="${active === 'list' ? 'on' : ''}">Checklist</a>
   <a href="${b}/findings" class="${active === 'findings' ? 'on' : ''}">Findings${c.findings.length ? ` (${c.findings.length})` : ''}</a>
-  <a href="${b}/close" class="${active === 'close' ? 'on' : ''}">Abschluss${iss.count ? ` <span class="dot"></span>` : ''}</a></nav>`;
+  <a href="${b}/close" class="${active === 'close' ? 'on' : ''}">Close-out${iss.count ? ` <span class="dot"></span>` : ''}</a></nav>`;
 }
 function photoGrid(ph, ctx) {
-  if (!ph.length) return '<div class="mut sm">Noch keine Fotos</div>';
-  return `<div class="grid">${ph.map(p => `<button class="ph" data-act="view" data-pid="${p.id}" data-ctx="${esc(ctx)}">${p.thumb ? `<img src="${thumbURL(p)}" alt="" loading="lazy">` : '<span class="noth">Foto</span>'}${p.findingId ? `<span class="ph-f">${fNo(cur.findings.find(f => f.id === p.findingId) || { num: 0 })}</span>` : ''}</button>`).join('')}</div>`;
+  if (!ph.length) return '<div class="mut sm">No photos yet</div>';
+  return `<div class="grid">${ph.map(p => `<button class="ph" data-act="view" data-pid="${p.id}" data-ctx="${esc(ctx)}">${p.thumb ? `<img src="${thumbURL(p)}" alt="" loading="lazy">` : '<span class="noth">Photo</span>'}${p.findingId ? `<span class="ph-f">${fNo(cur.findings.find(f => f.id === p.findingId) || { num: 0 })}</span>` : ''}</button>`).join('')}</div>`;
 }
 function itemSelect(s, val, field, extra = '') {
   return `<select class="inp" data-field="${field}" ${extra}>${leaves(s).map(l => `<option value="${esc(l.id)}" ${l.id === val ? 'selected' : ''}>${esc(l.id + ' ' + l.title)}</option>`).join('')}</select>`;
@@ -353,21 +353,21 @@ function itemRow(c, l, sub) {
 }
 function progressBox(c) {
   const m = summary(c), pct = Math.round(m.done / m.total * 100);
-  return `<div class="card pad"><div class="pb-h"><b>${m.done} / ${m.total} Prüfpunkte erledigt</b><span>${pct} %</span></div>
+  return `<div class="card pad"><div class="pb-h"><b>${m.done} / ${m.total} items done</b><span>${pct} %</span></div>
   <div class="pbar"><i style="width:${pct}%"></i></div>
-  <div class="mut sm">📷 ${m.photos} Fotos · ⚠ ${m.findings} Findings${m.noWO ? ` · <span class="bad">${m.noWO} ohne WO</span>` : ''}${c.s.closedAt ? ` · <span class="ok">abgeschlossen</span>` : ''}</div></div>`;
+  <div class="mut sm">📷 ${m.photos} photos · ⚠ ${m.findings} Findings${m.noWO ? ` · <span class="bad">${m.noWO} without WO</span>` : ''}${c.s.closedAt ? ` · <span class="ok">closed</span>` : ''}</div></div>`;
 }
 function findingMini(c, f) {
-  return `<a class="fmini" href="#/s/${c.s.id}/f/${f.id}"><b>${fNo(f)}</b><span class="grow">${esc(f.text || '(ohne Beschreibung)')}</span>
-  <span class="chip ${f.wo ? 'ok' : 'bad'}">${f.wo ? 'WO ' + esc(f.wo) : 'ohne WO'}</span></a>`;
+  return `<a class="fmini" href="#/s/${c.s.id}/f/${f.id}"><b>${fNo(f)}</b><span class="grow">${esc(f.text || '(no description)')}</span>
+  <span class="chip ${f.wo ? 'ok' : 'bad'}">${f.wo ? 'WO ' + esc(f.wo) : 'no WO'}</span></a>`;
 }
 
 /* ---------------- Views ---------------- */
 async function viewHome() {
   const ss = (await getAll('sessions')).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  let h = topbar('ARC Physical', 'Physical Survey Helper', null, `<button class="tb-btn" data-act="settings" aria-label="Einstellungen">⚙︎</button>`);
-  h += `<main class="wrap"><button class="btn pri big block" data-act="newSession">+ Neues Physical</button>`;
-  if (!ss.length) h += `<p class="empty">Noch keine Physicals erfasst.</p>`;
+  let h = topbar('ARC Physical', 'Physical Survey Helper', null, `<button class="tb-btn" data-act="settings" aria-label="Settings">⚙︎</button>`);
+  h += `<main class="wrap"><button class="btn pri big block" data-act="newSession">+ New Physical</button>`;
+  if (!ss.length) h += `<p class="empty">No Physicals yet.</p>`;
   for (const s of ss) {
     const m = s.summary || { done: 0, total: 17, photos: 0, findings: 0, noWO: 0 };
     const pct = m.total ? Math.round(m.done / m.total * 100) : 0;
@@ -376,13 +376,13 @@ async function viewHome() {
     <div class="mut sm">${esc([s.msn && 'MSN ' + s.msn, s.type, s.location].filter(Boolean).join(' · '))}</div>
     <div class="pbar"><i style="width:${pct}%"></i></div>
     <div class="chips"><span class="chip">${m.done}/${m.total}</span><span class="chip">📷 ${m.photos}</span>
-    <span class="chip ${m.findings ? 'fnd' : ''}">⚠ ${m.findings}${m.noWO ? ` · ${m.noWO} ohne WO` : ''}</span>
-    ${s.closedAt ? '<span class="chip ok">abgeschlossen</span>' : ''}${unexp ? '<span class="chip bad">nicht exportiert</span>' : ''}</div></a>`;
+    <span class="chip ${m.findings ? 'fnd' : ''}">⚠ ${m.findings}${m.noWO ? ` · ${m.noWO} without WO` : ''}</span>
+    ${s.closedAt ? '<span class="chip ok">closed</span>' : ''}${unexp ? '<span class="chip bad">not exported</span>' : ''}</div></a>`;
   }
   return h + '</main>';
 }
 function viewSession(c) {
-  let h = topbar(c.s.reg, sessSub(c.s), '#/', `<button class="tb-btn" data-act="editSession" aria-label="Bearbeiten">✎</button>`);
+  let h = topbar(c.s.reg, sessSub(c.s), '#/', `<button class="tb-btn" data-act="editSession" aria-label="Edit">✎</button>`);
   h += tabs(c, 'list') + `<main class="wrap">` + progressBox(c);
   const cnt = L => `${L.filter(l => evalItem(c, l).state === 'done').length}/${L.length}`;
   for (const g of c.s.checklist) {
@@ -405,29 +405,29 @@ function viewItem(c, id) {
   const prev = L[i - 1], next = L[i + 1];
   let h = topbar(`${l.id} ${l.title}`, `${c.s.reg}${l.parents.length ? ' · ' + l.parents[l.parents.length - 1].title : ''}`, base);
   h += `<main class="wrap has-bbar"><div class="card pad"><div class="lbl">Status</div><div class="seg">
-  ${[['open', 'Offen'], ['ok', 'Geprüft'], ['na', 'N/A']].map(([v, t]) => `<button data-act="setStatus" data-item="${l.id}" data-v="${v}" class="${st.status === v ? 'on ' + v : ''}">${t}</button>`).join('')}</div>
-  ${st.status === 'na' ? `<div class="lbl">Begründung N/A</div><input class="inp" data-field="naReason" data-id="${l.id}" value="${esc(st.reason)}" placeholder="Pflichtfeld">` : ''}
-  ${e.state === 'warn' ? `<div class="hint">${st.status === 'ok' ? (l.docs ? `Fehlende Dokumente: ${e.miss.map(d => d.name).join(', ')}` : `Pflichtfoto fehlt (${e.n} / ${e.min})`) : 'Begründung für N/A fehlt'}</div>` : ''}</div>`;
+  ${[['open', 'Open'], ['ok', 'Checked'], ['na', 'N/A']].map(([v, t]) => `<button data-act="setStatus" data-item="${l.id}" data-v="${v}" class="${st.status === v ? 'on ' + v : ''}">${t}</button>`).join('')}</div>
+  ${st.status === 'na' ? `<div class="lbl">N/A reason</div><input class="inp" data-field="naReason" data-id="${l.id}" value="${esc(st.reason)}" placeholder="Required">` : ''}
+  ${e.state === 'warn' ? `<div class="hint">${st.status === 'ok' ? (l.docs ? `Missing documents: ${e.miss.map(d => d.name).join(', ')}` : `Required photo missing (${e.n} / ${e.min})`) : 'N/A reason missing'}</div>` : ''}</div>`;
   const hi = HINTS[l.id];
-  if (hi?.length) h += `<details class="card pad hints" open><summary class="lbl">Worauf achten</summary><ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
+  if (hi?.length) h += `<details class="card pad hints" open><summary class="lbl">What to look for</summary><ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
   const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated);
   if (l.docs) {
     for (const d of l.docs) {
       const dp = ph.filter(p => p.docId === d.id);
-      h += `<div class="card pad"><div class="lbl">${esc(d.id)} ${esc(d.name)}${d.optional ? ` <span class="mut">(${d.optional === true ? 'optional' : esc(d.optional)})</span>` : ''} <span class="mut">${dp.length ? dp.length + ' Foto(s)' : ''}</span></div>${photoGrid(dp, 'd:' + d.id)}
-      <button class="btn" data-act="cam" data-item="${l.id}" data-doc="${d.id}">📷 Foto</button>
-      <button class="link" data-act="library" data-item="${l.id}" data-doc="${d.id}">Aus Mediathek</button></div>`;
+      h += `<div class="card pad"><div class="lbl">${esc(d.id)} ${esc(d.name)}${d.optional ? ` <span class="mut">(${d.optional === true ? 'optional' : esc(d.optional)})</span>` : ''} <span class="mut">${dp.length ? dp.length + ' photo(s)' : ''}</span></div>${photoGrid(dp, 'd:' + d.id)}
+      <button class="btn" data-act="cam" data-item="${l.id}" data-doc="${d.id}">📷 Photo</button>
+      <button class="link" data-act="library" data-item="${l.id}" data-doc="${d.id}">From library</button></div>`;
     }
     const rest = ph.filter(p => !p.docId && !p.findingId);
-    if (rest.length) h += `<div class="card pad"><div class="lbl">Sonstige Fotos</div>${photoGrid(rest, 'item:' + l.id)}</div>`;
-  } else h += `<div class="card pad"><div class="lbl">Fotos <span class="mut">${e.n}${e.min ? ` / min. ${e.min}` : ''}</span></div>${photoGrid(ph, 'item:' + l.id)}
-  <button class="link" data-act="library" data-item="${l.id}">Aus Mediathek hinzufügen</button></div>`;
+    if (rest.length) h += `<div class="card pad"><div class="lbl">Other photos</div>${photoGrid(rest, 'item:' + l.id)}</div>`;
+  } else h += `<div class="card pad"><div class="lbl">Photos <span class="mut">${e.n}${e.min ? ` / min. ${e.min}` : ''}</span></div>${photoGrid(ph, 'item:' + l.id)}
+  <button class="link" data-act="library" data-item="${l.id}">Add from library</button></div>`;
   h += `<div class="card pad"><div class="lbl">Findings</div>${e.fnd.length ? e.fnd.map(f => findingMini(c, f)).join('') : '<div class="mut sm">Keine</div>'}
-  <button class="link" data-act="newFindingNoPhoto" data-item="${l.id}">Finding ohne Foto anlegen</button></div>`;
-  h += `<div class="card pad"><div class="lbl">Notiz</div><textarea class="inp" rows="2" data-field="itemNote" data-id="${l.id}" placeholder="optional">${esc(st.note)}</textarea></div>`;
+  <button class="link" data-act="newFindingNoPhoto" data-item="${l.id}">Create finding without photo</button></div>`;
+  h += `<div class="card pad"><div class="lbl">Note</div><textarea class="inp" rows="2" data-field="itemNote" data-id="${l.id}" placeholder="optional">${esc(st.note)}</textarea></div>`;
   h += `<div class="nav2">${prev ? `<a class="btn" href="${base}/i/${prev.id}">‹ ${esc(prev.id)}</a>` : '<span></span>'}
   ${next ? `<a class="btn" href="${base}/i/${next.id}">${esc(next.id)} ›</a>` : `<a class="btn" href="${base}/close">Abschluss ›</a>`}</div></main>`;
-  h += `<div class="bbar"><button class="btn pri big grow" data-act="cam" data-item="${l.id}">📷 Foto</button>
+  h += `<div class="bbar"><button class="btn pri big grow" data-act="cam" data-item="${l.id}">📷 Photo</button>
   <button class="btn big fndbtn" data-act="camFinding" data-item="${l.id}">⚠ Finding</button></div>`;
   return h;
 }
@@ -436,34 +436,34 @@ function viewFinding(c, fid) {
   if (!f) return notFound(c);
   const l = leafById(c.s, f.itemId), ph = c.photos.filter(p => p.findingId === f.id).sort(byCreated);
   let h = topbar(`Finding ${fNo(f)}`, l ? `${l.id} ${l.title}` : '', 'history');
-  h += `<main class="wrap has-bbar"><div class="card pad"><div class="lbl">Beschreibung</div>
-  <textarea class="inp" rows="3" data-field="fText" data-fid="${f.id}" placeholder="Kurzbeschreibung (Diktat über Tastatur-Mikrofon)">${esc(f.text)}</textarea></div>`;
-  h += `<div class="card pad"><div class="lbl">Fotos <span class="mut">${ph.length}</span></div>${photoGrid(ph, 'f:' + f.id)}
-  <button class="link" data-act="library" data-item="${f.itemId}" data-fid="${f.id}">Aus Mediathek hinzufügen</button></div>`;
+  h += `<main class="wrap has-bbar"><div class="card pad"><div class="lbl">Description</div>
+  <textarea class="inp" rows="3" data-field="fText" data-fid="${f.id}" placeholder="Short description (dictate via keyboard mic)">${esc(f.text)}</textarea></div>`;
+  h += `<div class="card pad"><div class="lbl">Photos <span class="mut">${ph.length}</span></div>${photoGrid(ph, 'f:' + f.id)}
+  <button class="link" data-act="library" data-item="${f.itemId}" data-fid="${f.id}">Add from library</button></div>`;
   h += `<div class="card pad"><div class="lbl">Work Order</div>
-  <input class="inp" data-field="fWO" data-fid="${f.id}" value="${esc(f.wo)}" placeholder="WO-Nummer" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
+  <input class="inp" data-field="fWO" data-fid="${f.id}" value="${esc(f.wo)}" placeholder="WO number" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
   <label class="chk"><input type="checkbox" data-field="fRectified" data-fid="${f.id}" ${f.rectified ? 'checked' : ''}> Rectified</label>
   ${f.rectified ? `<textarea class="inp" rows="2" data-field="fRect" data-fid="${f.id}" placeholder="Rectification (optional)">${esc(f.rect)}</textarea>` : ''}</div>`;
-  h += `<div class="card pad"><div class="lbl">Prüfpunkt</div>${itemSelect(c.s, f.itemId, 'fItem', `data-fid="${f.id}"`)}
-  <div class="mut sm" style="margin-top:8px">Erfasst ${fmtDT(f.createdAt)}</div></div>
-  <button class="btn danger block" data-act="delFinding" data-fid="${f.id}">Finding löschen</button></main>`;
-  h += `<div class="bbar"><button class="btn pri big grow" data-act="cam" data-item="${f.itemId}" data-fid="${f.id}">📷 Foto zum Finding</button></div>`;
+  h += `<div class="card pad"><div class="lbl">Checklist item</div>${itemSelect(c.s, f.itemId, 'fItem', `data-fid="${f.id}"`)}
+  <div class="mut sm" style="margin-top:8px">Created ${fmtDT(f.createdAt)}</div></div>
+  <button class="btn danger block" data-act="delFinding" data-fid="${f.id}">Delete finding</button></main>`;
+  h += `<div class="bbar"><button class="btn pri big grow" data-act="cam" data-item="${f.itemId}" data-fid="${f.id}">📷 Photo for finding</button></div>`;
   return h;
 }
 function viewFindings(c) {
   let h = topbar(c.s.reg, sessSub(c.s), '#/') + tabs(c, 'findings') + '<main class="wrap">';
   const all = [...c.findings].sort((a, b) => a.num - b.num);
   const flt = { all: () => true, nowo: f => !f.wo?.trim(), wo: f => f.wo?.trim() && !f.rectified, rect: f => f.rectified };
-  const lbl = { all: 'Alle', nowo: 'Ohne WO', wo: 'WO offen', rect: 'Rectified' };
+  const lbl = { all: 'All', nowo: 'No WO', wo: 'WO open', rect: 'Rectified' };
   h += `<div class="filters">${Object.keys(flt).map(k => `<button class="chip-btn ${fFilter === k ? 'on' : ''}" data-act="fFilter" data-v="${k}">${lbl[k]} ${all.filter(flt[k]).length}</button>`).join('')}</div>`;
   const list = all.filter(flt[fFilter] || flt.all);
-  if (!list.length) h += '<p class="empty">Keine Findings in dieser Ansicht.</p>';
+  if (!list.length) h += '<p class="empty">No findings in this view.</p>';
   for (const f of list) {
     const l = leafById(c.s, f.itemId), ph = c.photos.filter(p => p.findingId === f.id).sort(byCreated);
     h += `<div class="card fcard"><a class="fc-h" href="#/s/${c.s.id}/f/${f.id}"><b>${fNo(f)}</b><span class="mut grow">${esc(l ? l.id + ' ' + l.title : f.itemId)}</span><span class="chev">›</span></a>
-    ${ph.length ? `<div class="fc-ph">${ph.slice(0, 3).map(p => `<button class="ph" data-act="view" data-pid="${p.id}" data-ctx="f:${f.id}">${p.thumb ? `<img src="${thumbURL(p)}" alt="">` : '<span class="noth">Foto</span>'}</button>`).join('')}</div>` : ''}
-    <div class="fc-t">${esc(f.text || '(ohne Beschreibung)')}</div>
-    <div class="fc-wo"><input class="inp" data-field="fWO" data-fid="${f.id}" value="${esc(f.wo)}" placeholder="WO-Nummer eintragen" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
+    ${ph.length ? `<div class="fc-ph">${ph.slice(0, 3).map(p => `<button class="ph" data-act="view" data-pid="${p.id}" data-ctx="f:${f.id}">${p.thumb ? `<img src="${thumbURL(p)}" alt="">` : '<span class="noth">Photo</span>'}</button>`).join('')}</div>` : ''}
+    <div class="fc-t">${esc(f.text || '(no description)')}</div>
+    <div class="fc-wo"><input class="inp" data-field="fWO" data-fid="${f.id}" value="${esc(f.wo)}" placeholder="Enter WO number" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
     ${f.rectified ? '<span class="chip ok">rectified</span>' : ''}</div></div>`;
   }
   return h + '</main>';
@@ -474,36 +474,36 @@ function viewClose(c) {
   const sec = (title, arr, link) => arr.length ? `<div class="iss"><div class="iss-h">${title} <span class="chip bad">${arr.length}</span></div>${arr.map(link).join('')}</div>` : '';
   const li = l => `<a class="iss-i" href="${b}/i/${l.id}">${esc(l.id)} ${esc(l.title)} ›</a>`;
   const lf = f => `<a class="iss-i" href="${b}/f/${f.id}">${fNo(f)} · ${esc(f.itemId)} ${esc((f.text || '').slice(0, 40))} ›</a>`;
-  h += `<div class="card pad"><div class="lbl">Vollständigkeits-Check</div>`;
-  h += iss.count ? sec('Prüfpunkte offen', iss.open, li) + sec('Pflichtfoto fehlt', iss.noPhoto, li) + sec('N/A ohne Begründung', iss.noReason, li)
-    + sec('Findings ohne WO-Nummer', iss.noWO, lf) + sec('Findings ohne Beschreibung', iss.noText, lf)
-    : `<div class="okbox">✓ Alle Prüfpunkte bewertet, Pflichtfotos vorhanden, alle Findings mit WO.</div>`;
+  h += `<div class="card pad"><div class="lbl">Completeness check</div>`;
+  h += iss.count ? sec('Items open', iss.open, li) + sec('Required photo missing', iss.noPhoto, li) + sec('N/A without reason', iss.noReason, li)
+    + sec('Findings without WO number', iss.noWO, lf) + sec('Findings without description', iss.noText, lf)
+    : `<div class="okbox">✓ All items assessed, required photos present, all findings with WO.</div>`;
   h += '</div>';
   if (!s.closedAt) {
-    h += `<div class="card pad"><div class="lbl">Physical abschließen</div>
-    ${iss.count ? `<textarea class="inp" rows="2" data-field="closeReason" placeholder="Begründung für Abschluss mit offenen Punkten (Pflicht)">${esc(s.closeReason || '')}</textarea>` : ''}
-    <button class="btn pri block" data-act="closeSession">Physical abschließen</button></div>`;
+    h += `<div class="card pad"><div class="lbl">Close Physical</div>
+    ${iss.count ? `<textarea class="inp" rows="2" data-field="closeReason" placeholder="Reason for closing with open items (required)">${esc(s.closeReason || '')}</textarea>` : ''}
+    <button class="btn pri block" data-act="closeSession">Close Physical</button></div>`;
   } else {
-    h += `<div class="card pad"><div class="okbox">Abgeschlossen ${fmtDT(s.closedAt)}</div>${s.closeReason ? `<div class="sm">Begründung: ${esc(s.closeReason)}</div>` : ''}
-    <div class="mut sm">WO-Nummern und Rectifications können weiterhin nachgetragen werden.</div>
-    <button class="btn block" data-act="reopen">Wieder öffnen</button></div>`;
+    h += `<div class="card pad"><div class="okbox">Closed ${fmtDT(s.closedAt)}</div>${s.closeReason ? `<div class="sm">Reason: ${esc(s.closeReason)}</div>` : ''}
+    <div class="mut sm">WO numbers and rectifications can still be added.</div>
+    <button class="btn block" data-act="reopen">Reopen</button></div>`;
   }
   const size = c.photos.reduce((a, p) => a + (p.size || 0), 0);
   const exp = s.exportedAt && s.modifiedAt <= s.exportedAt;
   h += `<div class="card pad"><div class="lbl">Export (ZIP)</div>
-  <div class="sm">${c.photos.length} Fotos · ca. ${fmtMB(size)} · Ordnerstruktur nach Prüfpunkten, Findings-Ordner, Findings.csv, Prüfprotokoll</div>
-  <div class="sm ${exp ? 'ok' : 'bad'}">${s.exportedAt ? (exp ? 'Exportiert ' + fmtDT(s.exportedAt) : 'Seit letztem Export geändert') : 'Noch nicht exportiert'}</div>`;
+  <div class="sm">${c.photos.length} photos · approx. ${fmtMB(size)} · folder structure per checklist item, findings folder, Findings.csv, inspection report</div>
+  <div class="sm ${exp ? 'ok' : 'bad'}">${s.exportedAt ? (exp ? 'Exported ' + fmtDT(s.exportedAt) : 'Changed since last export') : 'Not exported yet'}</div>`;
   if (exportReady && exportReady.sid === s.id) {
-    h += `<div class="okbox">ZIP bereit: ${esc(exportReady.name)} (${fmtMB(exportReady.blob.size)})</div>
-    <button class="btn pri block" data-act="shareZip">Teilen / In „Dateien“ sichern</button>
-    <button class="btn block" data-act="downloadZip">Herunterladen</button>`;
-  } else h += `<button class="btn pri block" data-act="buildZip">ZIP erstellen</button>`;
-  h += `</div><div class="card pad"><div class="lbl">Gerät aufräumen</div>
-  <div class="mut sm">Löscht dieses Physical inkl. aller Fotos dauerhaft aus der App.</div>
-  <button class="btn danger block" data-act="delSession">Physical vom Gerät löschen</button></div></main>`;
+    h += `<div class="okbox">ZIP ready: ${esc(exportReady.name)} (${fmtMB(exportReady.blob.size)})</div>
+    <button class="btn pri block" data-act="shareZip">Share / Save to Files</button>
+    <button class="btn block" data-act="downloadZip">Download</button>`;
+  } else h += `<button class="btn pri block" data-act="buildZip">Create ZIP</button>`;
+  h += `</div><div class="card pad"><div class="lbl">Clean up device</div>
+  <div class="mut sm">Permanently deletes this Physical incl. all photos from the app.</div>
+  <button class="btn danger block" data-act="delSession">Delete Physical from device</button></div></main>`;
   return h;
 }
-function notFound(c) { return topbar('Nicht gefunden', '', c ? `#/s/${c.s.id}` : '#/') + '<main class="wrap"><p class="empty">Eintrag existiert nicht (mehr).</p></main>'; }
+function notFound(c) { return topbar('Not found', '', c ? `#/s/${c.s.id}` : '#/') + '<main class="wrap"><p class="empty">Entry does not exist (anymore).</p></main>'; }
 
 /* ---------------- Router ---------------- */
 function parseRoute() {
@@ -547,18 +547,18 @@ function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML =
 
 function sessionSheet(s) {
   const v = s || { reg: '', msn: '', type: '', location: '', date: todayYMD() };
-  openSheet(`<h2>${s ? 'Physical bearbeiten' : 'Neues Physical'}</h2>
-  <label class="lbl">Registrierung *</label><input class="inp" id="fReg" value="${esc(v.reg)}" placeholder="D-ABCD" autocapitalize="characters" autocomplete="off" autocorrect="off">
+  openSheet(`<h2>${s ? 'Edit Physical' : 'New Physical'}</h2>
+  <label class="lbl">Registration *</label><input class="inp" id="fReg" value="${esc(v.reg)}" placeholder="D-ABCD" autocapitalize="characters" autocomplete="off" autocorrect="off">
   <label class="lbl">MSN</label><input class="inp" id="fMsn" value="${esc(v.msn)}" autocomplete="off">
-  <label class="lbl">Typ</label><input class="inp" id="fType" value="${esc(v.type)}" placeholder="z. B. A320-214" autocomplete="off">
-  <label class="lbl">Ort</label><input class="inp" id="fLoc" value="${esc(v.location)}" autocomplete="off">
-  <label class="lbl">Datum</label><input class="inp" id="fDate" type="date" value="${esc(v.date)}">
-  <div class="row2"><button class="btn" data-act="sheetCancel">Abbrechen</button><button class="btn pri" data-act="saveSession" data-id="${s ? s.id : ''}">Speichern</button></div>`);
+  <label class="lbl">Type</label><input class="inp" id="fType" value="${esc(v.type)}" placeholder="e.g. A320-214" autocomplete="off">
+  <label class="lbl">Location</label><input class="inp" id="fLoc" value="${esc(v.location)}" autocomplete="off">
+  <label class="lbl">Date</label><input class="inp" id="fDate" type="date" value="${esc(v.date)}">
+  <div class="row2"><button class="btn" data-act="sheetCancel">Cancel</button><button class="btn pri" data-act="saveSession" data-id="${s ? s.id : ''}">Save</button></div>`);
   if (!s) setTimeout(() => $('#fReg')?.focus(), 50);
 }
 async function saveSession(id) {
   const reg = $('#fReg').value.trim().toUpperCase();
-  if (!reg) { toast('Registrierung fehlt'); return; }
+  if (!reg) { toast('Registration missing'); return; }
   const data = { reg, msn: $('#fMsn').value.trim(), type: $('#fType').value.trim(), location: $('#fLoc').value.trim(), date: $('#fDate').value || todayYMD() };
   if (id) { Object.assign(cur.s, data); await touch(); closeSheet(); render(); return; }
   const s = { id: uid(), ...data, createdAt: nowISO(), modifiedAt: nowISO(), checklist: JSON.parse(JSON.stringify(CHECKLIST)),
@@ -569,17 +569,17 @@ async function saveSession(id) {
   closeSheet(); location.hash = `#/s/${s.id}`;
 }
 async function settingsSheet() {
-  openSheet(`<h2>Einstellungen</h2><label class="lbl">Fotoqualität (für neue Fotos)</label>
+  openSheet(`<h2>Settings</h2><label class="lbl">Photo quality (for new photos)</label>
   <select class="inp" id="setQ">${Object.entries(QUALITY).map(([k, q]) => `<option value="${k}" ${settings.quality === k ? 'selected' : ''}>${q.label}</option>`).join('')}</select>
-  <div class="mut sm">„Hoch“ hält Placards lesbar und den ZIP-Export auf dem iPhone stabil. „Original“ behält EXIF-Daten, erzeugt aber sehr große Exporte.</div>
-  <div class="lbl">Speicher</div><div class="sm" id="storInfo">…</div>
-  <div class="mut sm">Version ${APP_VERSION}. Daten bleiben ausschließlich lokal auf diesem Gerät.</div>
-  <div class="row2"><button class="btn pri" data-act="sheetCancel">Fertig</button></div>`);
+  <div class="mut sm">“Original” keeps full resolution and EXIF data but creates very large exports. “High” keeps placards legible and the ZIP export on the iPhone more stable.</div>
+  <div class="lbl">Storage</div><div class="sm" id="storInfo">…</div>
+  <div class="mut sm">Version ${APP_VERSION}. Data stays on this device only.</div>
+  <div class="row2"><button class="btn pri" data-act="sheetCancel">Done</button></div>`);
   $('#setQ').onchange = e => { settings.quality = e.target.value; saveSettings(); };
   try {
     const est = await navigator.storage?.estimate?.(); const pers = await navigator.storage?.persisted?.();
-    $('#storInfo').textContent = est ? `${fmtMB(est.usage || 0)} belegt · dauerhafter Speicher: ${pers ? 'ja' : 'nicht bestätigt (App zum Home-Bildschirm hinzufügen)'}` : 'nicht verfügbar';
-  } catch { $('#storInfo').textContent = 'nicht verfügbar'; }
+    $('#storInfo').textContent = est ? `${fmtMB(est.usage || 0)} used · persistent storage: ${pers ? 'yes' : 'not confirmed (add app to Home Screen)'}` : 'not available';
+  } catch { $('#storInfo').textContent = 'not available'; }
 }
 
 /* Foto-Viewer */
@@ -599,18 +599,18 @@ function renderViewer() {
   const c = cur, p = c.photos.find(x => x.id === viewer.pid);
   if (!p) return closeViewer();
   const list = viewerList(), i = list.findIndex(x => x.id === p.id), el = $('#viewer');
-  el.innerHTML = `<div class="v-top"><button class="v-btn" data-act="vClose" aria-label="Schließen">✕</button>
+  el.innerHTML = `<div class="v-top"><button class="v-btn" data-act="vClose" aria-label="Close">✕</button>
   <span class="v-info">${i + 1}/${list.length}</span>
-  ${p.annotated ? `<button class="v-btn txt" data-act="vOrig">${viewer.orig ? 'Markiert' : 'Original'}</button>` : ''}
-  <button class="v-btn txt mark" data-act="vEdit">✏︎ Markieren</button>
-  <button class="v-btn" data-act="vDel" aria-label="Löschen">🗑</button></div>
-  <div class="v-img">${viewer.url ? `<img src="${viewer.url}" alt="">` : '<span>Bild nicht lesbar</span>'}
+  ${p.annotated ? `<button class="v-btn txt" data-act="vOrig">${viewer.orig ? 'Marked' : 'Original'}</button>` : ''}
+  <button class="v-btn txt mark" data-act="vEdit">✏︎ Mark up</button>
+  <button class="v-btn" data-act="vDel" aria-label="Delete">🗑</button></div>
+  <div class="v-img">${viewer.url ? `<img src="${viewer.url}" alt="">` : '<span>Image not readable</span>'}
   ${i > 0 ? '<button class="v-nav l" data-act="vPrev">‹</button>' : ''}${i < list.length - 1 ? '<button class="v-nav r" data-act="vNext">›</button>' : ''}</div>
-  <div class="v-panel"><div class="v-meta">${fmtDT(p.createdAt)}${p.annotated ? (viewer.orig ? ' · Original' : ' · markierte Kopie') : ''}</div><label>Prüfpunkt</label>${itemSelect(c.s, p.itemId, 'vItem')}
-  <label>Finding</label><select class="inp" data-field="vFinding"><option value="">– kein Finding (Nachweisfoto) –</option>
+  <div class="v-panel"><div class="v-meta">${fmtDT(p.createdAt)}${p.annotated ? (viewer.orig ? ' · Original' : ' · marked copy') : ''}</div><label>Checklist item</label>${itemSelect(c.s, p.itemId, 'vItem')}
+  <label>Finding</label><select class="inp" data-field="vFinding"><option value="">– no finding (evidence photo) –</option>
   ${[...c.findings].sort((a, b) => a.num - b.num).map(f => `<option value="${f.id}" ${p.findingId === f.id ? 'selected' : ''}>${fNo(f)} · ${esc(f.itemId)} ${esc((f.text || '').slice(0, 30))}</option>`).join('')}
-  <option value="__new">+ Neues Finding aus diesem Foto</option></select>
-  <label>Notiz</label><input class="inp" data-field="vNote" value="${esc(p.note)}" placeholder="optional"></div>`;
+  <option value="__new">+ New finding from this photo</option></select>
+  <label>Note</label><input class="inp" data-field="vNote" value="${esc(p.note)}" placeholder="optional"></div>`;
   el.hidden = false;
 }
 function closeViewer() {
@@ -653,14 +653,14 @@ function drawShapes(ctx, shapes, W, H) {
 async function openEditor(pid) {
   const p = cur.photos.find(x => x.id === pid);
   const b = await get('blobs', pid);
-  if (!b) { toast('Original nicht lesbar'); return; }
+  if (!b) { toast('Original not readable'); return; }
   const url = URL.createObjectURL(new Blob([b.buf], { type: b.type })), img = new Image(); img.src = url;
-  try { await img.decode(); } catch { URL.revokeObjectURL(url); toast('Dieses Bildformat kann nicht markiert werden'); return; }
+  try { await img.decode(); } catch { URL.revokeObjectURL(url); toast('This image format cannot be marked up'); return; }
   $('#toast').hidden = true;
   ed = { p, img, url, shapes: JSON.parse(JSON.stringify(p.shapes || [])), drawing: null };
   const el = $('#editor');
-  el.innerHTML = `<div class="v-top"><button class="v-btn" data-act="edCancel" aria-label="Abbrechen">✕</button>
-  <span class="v-info">Markieren · ${esc(p.itemId)}</span><button class="btn pri" data-act="edSave">Speichern</button></div>
+  el.innerHTML = `<div class="v-top"><button class="v-btn" data-act="edCancel" aria-label="Cancel">✕</button>
+  <span class="v-info">Mark up · ${esc(p.itemId)}</span><button class="btn pri" data-act="edSave">Save</button></div>
   <div class="ed-wrap"><canvas id="edCv"></canvas></div><div class="ed-bar" id="edBar"></div>`;
   el.hidden = false;
   const cv = $('#edCv');
@@ -669,12 +669,12 @@ async function openEditor(pid) {
   edBar(); edLayout();
 }
 function edBar() {
-  const tools = [['circle', '◯ Kreis'], ['arrow', '➚ Pfeil'], ['free', '✎ Frei']];
+  const tools = [['circle', '◯ Circle'], ['arrow', '➚ Arrow'], ['free', '✎ Free']];
   const cols = ['#ff1f1f', '#ffd400', '#ffffff'];
   $('#edBar').innerHTML = tools.map(([v, t]) => `<button class="ed-b ${edTool === v ? 'on' : ''}" data-act="edTool" data-v="${v}">${t}</button>`).join('')
-    + cols.map(c => `<button class="ed-c ${edColor === c ? 'on' : ''}" style="background:${c}" data-act="edColor" data-v="${c}" aria-label="Farbe"></button>`).join('')
+    + cols.map(c => `<button class="ed-c ${edColor === c ? 'on' : ''}" style="background:${c}" data-act="edColor" data-v="${c}" aria-label="Colour"></button>`).join('')
     + `<span class="grow"></span><button class="ed-b" data-act="edUndo" ${ed.shapes.length ? '' : 'disabled'}>↶</button>
-    <button class="ed-b" data-act="edClear" ${ed.shapes.length ? '' : 'disabled'}>Alle</button>`;
+    <button class="ed-b" data-act="edClear" ${ed.shapes.length ? '' : 'disabled'}>All</button>`;
 }
 function edLayout() {
   if (!ed) return;
@@ -724,7 +724,7 @@ async function makeThumb(img, shapes) {
 }
 async function edSave() {
   const { p, img, shapes } = ed;
-  busy('Markierung wird gespeichert …');
+  busy('Saving mark-up …');
   try {
     if (shapes.length) {
       const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
@@ -738,7 +738,7 @@ async function edSave() {
     }
     const u = thumbURLs.get(p.id); if (u) { URL.revokeObjectURL(u); thumbURLs.delete(p.id); }
     await touch();
-  } catch (err) { console.error(err); toast('Speichern fehlgeschlagen: ' + err.message); }
+  } catch (err) { console.error(err); toast('Save failed: ' + err.message); }
   finally { busy(false); }
   const ctx = viewer?.ctx; closeEditor();
   if (ctx) await openViewer(p.id, ctx);
@@ -751,54 +751,54 @@ window.addEventListener('resize', () => setTimeout(edLayout, 100));
 
 /* ---------------- Export ---------------- */
 function csvCell(v) { const s = String(v ?? ''); return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
-const findingFolder = f => safeName(`${fNo(f)}_${f.itemId}_${f.wo?.trim() ? 'WO' + f.wo.trim() : 'ohne-WO'}`);
+const findingFolder = f => safeName(`${fNo(f)}_${f.itemId}_${f.wo?.trim() ? 'WO' + f.wo.trim() : 'no-WO'}`);
 const encPath = p => p.split('/').map(encodeURIComponent).join('/');
 
 function protocolHTML(c, names, annNames) {
-  const s = c.s, L = leaves(s), iss = checkIssues(c), stl = { open: 'offen', ok: 'geprüft', na: 'N/A' };
+  const s = c.s, L = leaves(s), iss = checkIssues(c), stl = { open: 'open', ok: 'checked', na: 'N/A' };
   const rows = L.map(l => {
     const e = evalItem(c, l);
-    const rem = [e.st.status === 'na' ? 'Begründung: ' + (e.st.reason || '—') : '', e.st.note].filter(Boolean).join(' | ');
+    const rem = [e.st.status === 'na' ? 'Reason: ' + (e.st.reason || '—') : '', e.st.note].filter(Boolean).join(' | ');
     return `<tr class="${e.state}"><td>${esc(l.id)}</td><td>${esc(l.title)}</td><td>${stl[e.st.status]}${e.state === 'warn' ? ' ⚠' : ''}</td><td>${e.n} / ${e.min}</td><td>${e.fnd.map(fNo).join(', ')}</td><td>${esc(rem)}</td><td>${e.st.changedAt ? fmtDT(e.st.changedAt) : ''}</td></tr>`;
   }).join('');
   const fs = [...c.findings].sort((a, b) => a.num - b.num);
-  const frows = fs.map(f => `<tr><td>${fNo(f)}</td><td>${esc(f.itemId)}</td><td>${esc(f.text)}</td><td>${esc(f.wo)}</td><td>${f.rectified ? 'ja' : 'nein'}</td><td>${esc(f.rect)}</td><td>${c.photos.filter(p => p.findingId === f.id).length}</td></tr>`).join('');
+  const frows = fs.map(f => `<tr><td>${fNo(f)}</td><td>${esc(f.itemId)}</td><td>${esc(f.text)}</td><td>${esc(f.wo)}</td><td>${f.rectified ? 'yes' : 'no'}</td><td>${esc(f.rect)}</td><td>${c.photos.filter(p => p.findingId === f.id).length}</td></tr>`).join('');
   const fig = p => `<figure><a href="${encPath(annNames.get(p.id) || names.get(p.id))}"><img src="${encPath(annNames.get(p.id) || names.get(p.id))}" loading="lazy"></a><figcaption>${esc(names.get(p.id).split('/').pop())} · ${fmtDT(p.createdAt)}${p.findingId ? ' · ' + fNo(c.findings.find(f => f.id === p.findingId) || { num: 0 }) : ''}${p.note ? ' · ' + esc(p.note) : ''}</figcaption></figure>`;
   const gal = L.map(l => { const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated); return ph.length ? `<h3>${esc(l.id)} ${esc(l.title)}</h3><div class="g">${ph.map(fig).join('')}</div>` : ''; }).join('');
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prüfprotokoll ${esc(s.reg)} ${esc(fmtDay(s.date))}</title>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inspection Report ${esc(s.reg)} ${esc(fmtDay(s.date))}</title>
 <style>body{font:13px/1.4 -apple-system,Segoe UI,Arial,sans-serif;margin:24px;color:#111}h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px;border-bottom:2px solid #111}h3{font-size:14px;margin:16px 0 6px}
 table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:4px 6px;text-align:left;vertical-align:top}th{background:#eee}tr.warn td,tr.open td{background:#fdecea}
 .meta td{border:none;padding:2px 12px 2px 0}.g{display:flex;flex-wrap:wrap;gap:8px}figure{margin:0;width:180px}figure img{width:180px;height:135px;object-fit:cover;border:1px solid #ccc}figcaption{font-size:10px;color:#555}
 @media print{figure{break-inside:avoid}h2{break-after:avoid}}</style></head><body>
-<h1>ARC Physical Survey – Prüfprotokoll</h1>
+<h1>ARC Physical Survey – Inspection Report</h1>
 <table class="meta"><tr><td><b>Registrierung</b></td><td>${esc(s.reg)}</td><td><b>MSN</b></td><td>${esc(s.msn)}</td></tr>
 <tr><td><b>Typ</b></td><td>${esc(s.type)}</td><td><b>Ort</b></td><td>${esc(s.location)}</td></tr>
-<tr><td><b>Datum</b></td><td>${esc(fmtDay(s.date))}</td><td><b>Abschluss</b></td><td>${s.closedAt ? fmtDT(s.closedAt) : 'nicht abgeschlossen'}</td></tr>
-${s.closeReason ? `<tr><td><b>Begründung</b></td><td colspan="3">${esc(s.closeReason)}</td></tr>` : ''}
-<tr><td><b>Offene Punkte</b></td><td colspan="3">${iss.count ? `${iss.open.length} offen, ${iss.noPhoto.length} ohne Pflichtfoto, ${iss.noReason.length} N/A ohne Begründung, ${iss.noWO.length} Findings ohne WO` : 'keine'}</td></tr>
+<tr><td><b>Date</b></td><td>${esc(fmtDay(s.date))}</td><td><b>Closed</b></td><td>${s.closedAt ? fmtDT(s.closedAt) : 'not closed'}</td></tr>
+${s.closeReason ? `<tr><td><b>Reason</b></td><td colspan="3">${esc(s.closeReason)}</td></tr>` : ''}
+<tr><td><b>Open items</b></td><td colspan="3">${iss.count ? `${iss.open.length} open, ${iss.noPhoto.length} without required photo, ${iss.noReason.length} N/A without reason, ${iss.noWO.length} findings without WO` : 'none'}</td></tr>
 <tr><td><b>Export</b></td><td colspan="3">${fmtDT(nowISO())} · ARC Physical Helper ${APP_VERSION}</td></tr></table>
-<h2>Prüfpunkte</h2><table><tr><th>Nr.</th><th>Prüfpunkt</th><th>Status</th><th>Fotos</th><th>Findings</th><th>Bemerkung</th><th>Bewertet</th></tr>${rows}</table>
-<h2>Findings</h2>${fs.length ? `<table><tr><th>Nr.</th><th>Prüfpunkt</th><th>Beschreibung</th><th>WO</th><th>Rectified</th><th>Rectification</th><th>Fotos</th></tr>${frows}</table>` : '<p>Keine Findings.</p>'}
-<h2>Fotonachweise</h2>${gal || '<p>Keine Fotos.</p>'}</body></html>`;
+<h2>Checklist Items</h2><table><tr><th>No.</th><th>Item</th><th>Status</th><th>Photos</th><th>Findings</th><th>Remark</th><th>Assessed</th></tr>${rows}</table>
+<h2>Findings</h2>${fs.length ? `<table><tr><th>No.</th><th>Item</th><th>Description</th><th>WO</th><th>Rectified</th><th>Rectification</th><th>Photos</th></tr>${frows}</table>` : '<p>No findings.</p>'}
+<h2>Photo Evidence</h2>${gal || '<p>No photos.</p>'}</body></html>`;
 }
 
 async function buildZip() {
   const c = cur, s = c.s;
-  if (typeof JSZip === 'undefined') { toast('ZIP-Bibliothek nicht geladen'); return; }
+  if (typeof JSZip === 'undefined') { toast('ZIP library not loaded'); return; }
   await flush();
   const builtAt = nowISO();
   const root = safeName(`${s.date}_${s.reg}_ARC-Physical`);
   const zip = new JSZip(), R = zip.folder(root), L = leaves(s);
   for (const l of L) R.folder(leafPath(l)); // vollständige Ordnerstruktur, auch leere
   const photos = [...c.photos].sort(byCreated), names = new Map(), annNames = new Map(), cnt = {};
-  busy('Fotos werden gesammelt …');
+  busy('Collecting photos …');
   try {
     for (const p of photos) {
       const ext = extOf(p.type), f = p.findingId && c.findings.find(x => x.id === p.findingId);
       let path;
       if (f) { const fn = findingFolder(f); cnt[fn] = (cnt[fn] || 0) + 1; path = `Findings/${fn}/${fn}_${pad(cnt[fn])}.${ext}`; }
       else {
-        const l = L.find(x => x.id === p.itemId) || { id: p.itemId, folder: 'Unzugeordnet', parents: [] };
+        const l = L.find(x => x.id === p.itemId) || { id: p.itemId, folder: 'Unassigned', parents: [] };
         const d = p.docId && l.docs?.find(x => x.id === p.docId);
         if (d) { cnt[d.id] = (cnt[d.id] || 0) + 1; path = `${leafPath(l)}/${safeName(d.id + ' ' + d.name)}_${pad(cnt[d.id])}.${ext}`; }
         else { cnt[l.id] = (cnt[l.id] || 0) + 1; path = `${leafPath(l)}/${l.id}_${pad(cnt[l.id], 3)}.${ext}`; }
@@ -812,17 +812,17 @@ async function buildZip() {
       }
     }
     const fs = [...c.findings].sort((a, b) => a.num - b.num);
-    const head = ['Finding', 'Prüfpunkt', 'Bezeichnung', 'Beschreibung (Physical)', 'WO-Nr.', 'Rectified', 'Rectification', 'Anzahl Fotos', 'Ordner', 'Erfasst am', 'Wortlaut WO (manuell)'];
-    const rows = fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'ja' : 'nein', f.rect,
+    const head = ['Finding', 'Item', 'Item Title', 'Description (Physical)', 'WO No.', 'Rectified', 'Rectification', 'No. of Photos', 'Folder', 'Created', 'WO Wording (manual)'];
+    const rows = fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'yes' : 'no', f.rect,
       c.photos.filter(p => p.findingId === f.id).length, 'Findings/' + findingFolder(f), fmtDT(f.createdAt), '']);
     R.file('Findings.csv', '﻿' + [head, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n'));
     R.file('Pruefprotokoll.html', protocolHTML(c, names, annNames));
     R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, exportedAt: builtAt, session: s, findings: fs,
       photos: photos.map(p => ({ id: p.id, itemId: p.itemId, findingId: p.findingId, createdAt: p.createdAt, note: p.note, file: names.get(p.id), annotatedFile: annNames.get(p.id) || null })) }, null, 1));
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true }, m => busy(`ZIP wird erstellt … ${Math.round(m.percent)} %`));
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true }, m => busy(`Creating ZIP … ${Math.round(m.percent)} %`));
     if (exportReady?.url) URL.revokeObjectURL(exportReady.url);
     exportReady = { sid: s.id, blob, name: root + '.zip', url: URL.createObjectURL(blob), builtAt };
-  } catch (err) { console.error(err); toast('Export fehlgeschlagen: ' + err.message); }
+  } catch (err) { console.error(err); toast('Export failed: ' + err.message); }
   finally { busy(false); }
   render();
 }
@@ -836,7 +836,7 @@ async function shareZip() {
   try {
     if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: x.name }); await markExported(); }
     else downloadZip();
-  } catch (err) { if (err.name !== 'AbortError') toast('Teilen fehlgeschlagen: ' + err.message); }
+  } catch (err) { if (err.name !== 'AbortError') toast('Share failed: ' + err.message); }
 }
 function downloadZip() {
   const a = document.createElement('a'); a.href = exportReady.url; a.download = exportReady.name;
@@ -876,7 +876,7 @@ document.addEventListener('click', async e => {
       case 'toastAct': { const fn = toastFn; $('#toast').hidden = true; toastFn = null; fn?.(); break; }
       case 'delFinding': {
         const f = c.findings.find(x => x.id === d.fid);
-        if (!confirm(`${fNo(f)} löschen? Zugehörige Fotos bleiben als Nachweisfotos des Prüfpunkts erhalten.`)) break;
+        if (!confirm(`Delete ${fNo(f)}? Its photos remain as evidence photos of the checklist item.`)) break;
         const ph = c.photos.filter(p => p.findingId === f.id); ph.forEach(p => { p.findingId = null; });
         await savePhotoMetas(ph);
         await tx(['findings'], 'readwrite', t => { t.objectStore('findings').delete(f.id); });
@@ -885,7 +885,7 @@ document.addEventListener('click', async e => {
       }
       case 'closeSession': {
         await flush(); const iss = checkIssues(c);
-        if (iss.count && !c.s.closeReason?.trim()) { toast('Begründung für offene Punkte erforderlich'); break; }
+        if (iss.count && !c.s.closeReason?.trim()) { toast('Reason for open items required'); break; }
         if (!iss.count) c.s.closeReason = '';
         c.s.closedAt = nowISO(); await touch(); render(); break;
       }
@@ -895,8 +895,8 @@ document.addEventListener('click', async e => {
       case 'downloadZip': downloadZip(); break;
       case 'delSession': {
         const exp = c.s.exportedAt && c.s.modifiedAt <= c.s.exportedAt;
-        if (!confirm(`Physical ${c.s.reg} mit ${c.photos.length} Fotos dauerhaft löschen?`)) break;
-        if (!exp && !confirm('ACHTUNG: Der aktuelle Stand wurde NICHT exportiert. Trotzdem löschen?')) break;
+        if (!confirm(`Permanently delete Physical ${c.s.reg} with ${c.photos.length} photos?`)) break;
+        if (!exp && !confirm('WARNING: The current state has NOT been exported. Delete anyway?')) break;
         await deleteSession(); break;
       }
       case 'vClose': closeViewer(); break;
@@ -911,7 +911,7 @@ document.addEventListener('click', async e => {
       case 'vPrev': await viewerStep(-1); break;
       case 'vNext': await viewerStep(1); break;
       case 'vDel': {
-        if (!confirm('Foto löschen?')) break;
+        if (!confirm('Delete photo?')) break;
         const list = viewerList(), i = list.findIndex(x => x.id === viewer.pid), nxt = list[i + 1] || list[i - 1];
         const p = c.photos.find(x => x.id === viewer.pid); const ctx = viewer.ctx;
         await deletePhotos([p]);
@@ -943,14 +943,14 @@ async function onField(el, commit) {
       const p = c.photos.find(x => x.id === viewer.pid); p.itemId = v;
       const fd = p.findingId && c.findings.find(x => x.id === p.findingId);
       if (fd && fd.itemId !== v) p.findingId = null;
-      await savePhotoMetas([p]); await touch(); closeViewer(); toast(`Foto nach ${v} verschoben`);
+      await savePhotoMetas([p]); await touch(); closeViewer(); toast(`Photo moved to ${v}`);
     } break;
     case 'vFinding': if (commit) {
       const p = c.photos.find(x => x.id === viewer.pid);
       if (v === '__new') { const nf = await createFinding(p.itemId); p.findingId = nf.id; await savePhotoMetas([p]); await touch(); closeViewer(); location.hash = `#/s/${c.s.id}/f/${nf.id}`; break; }
       p.findingId = v || null;
       if (v) p.itemId = c.findings.find(x => x.id === v).itemId;
-      await savePhotoMetas([p]); await touch(); closeViewer(); toast(v ? 'Foto dem Finding zugeordnet' : 'Foto als Nachweisfoto gesetzt');
+      await savePhotoMetas([p]); await touch(); closeViewer(); toast(v ? 'Photo assigned to finding' : 'Photo set as evidence photo');
     } break;
   }
 }
@@ -963,7 +963,7 @@ for (const id of ['camIn', 'libIn']) {
     const files = [...inp.files]; inp.value = '';
     const ctx = capture; capture = null;
     if (!files.length || !ctx) return;
-    try { await addPhotos(files, ctx); } catch (err) { console.error(err); toast('Foto nicht gespeichert: ' + err.message); }
+    try { await addPhotos(files, ctx); } catch (err) { console.error(err); toast('Photo not saved: ' + err.message); }
   });
 }
 
@@ -986,7 +986,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     reg.addEventListener('updatefound', () => {
       const w = reg.installing;
       w?.addEventListener('statechange', () => {
-        if (w.state === 'installed' && navigator.serviceWorker.controller) toast('Update verfügbar', 'Neu laden', () => location.reload());
+        if (w.state === 'installed' && navigator.serviceWorker.controller) toast('Update available', 'Reload', () => location.reload());
       });
     });
   }).catch(() => {});

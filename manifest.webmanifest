@@ -1,7 +1,7 @@
 {
   "name": "ARC Physical Helper",
   "short_name": "ARC Physical",
-  "lang": "de",
+  "lang": "en",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
