@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.7.2';
+const APP_VERSION = '0.7.3';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -604,7 +604,7 @@ function openSheet(html) { const el = $('#sheet'); el.innerHTML = `<div class="s
 function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
 
 function sessionSheet(s) {
-  const v = s || { reg: '', msn: '', type: '', location: '', date: todayYMD() };
+  const v = s || { reg: 'D-A', msn: '', type: '', location: '', date: todayYMD() };
   openSheet(`<h2>${s ? 'Edit Physical' : 'New Physical'}</h2>
   <label class="lbl">Registration *</label><input class="inp" id="fReg" value="${esc(v.reg)}" placeholder="D-ABCD" autocapitalize="characters" autocomplete="off" autocorrect="off">
   <label class="lbl">MSN</label><input class="inp" id="fMsn" value="${esc(v.msn)}" autocomplete="off">
@@ -612,7 +612,7 @@ function sessionSheet(s) {
   <label class="lbl">Location</label><input class="inp" id="fLoc" value="${esc(v.location)}" autocomplete="off">
   <label class="lbl">Date</label><input class="inp" id="fDate" type="date" value="${esc(v.date)}">
   <div class="row2"><button class="btn" data-act="sheetCancel">Cancel</button><button class="btn pri" data-act="saveSession" data-id="${s ? s.id : ''}">Save</button></div>`);
-  if (!s) setTimeout(() => $('#fReg')?.focus(), 50);
+  if (!s) setTimeout(() => { const r = $('#fReg'); if (r) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } }, 50);
 }
 function smFields(sm, sides, inSheet) {
   const a = k => inSheet ? `id="sm_${k}"` : `data-field="sm_${k}" data-sid="${sm.id}"`;
@@ -642,7 +642,7 @@ function smReadSheet() { for (const k of ['pn', 'sn', 'desc', 'row', 'side']) { 
 
 async function saveSession(id) {
   const reg = $('#fReg').value.trim().toUpperCase();
-  if (!reg) { toast('Registration missing'); return; }
+  if (!reg || reg === 'D-A') { toast('Registration missing'); return; }
   const data = { reg, msn: $('#fMsn').value.trim(), type: $('#fType').value.trim(), location: $('#fLoc').value.trim(), date: $('#fDate').value || todayYMD() };
   if (id) { Object.assign(cur.s, data); await touch(); closeSheet(); render(); return; }
   const s = { id: uid(), ...data, createdAt: nowISO(), modifiedAt: nowISO(), checklist: JSON.parse(JSON.stringify(CHECKLIST)),
