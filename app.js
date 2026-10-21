@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.8';
+const APP_VERSION = '0.5.9';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -61,26 +61,22 @@ const CHECKLIST = [
    Einfach Zeilen ergänzen/ändern; Key = Prüfpunkt-ID. */
 const HINTS = {
   '4.2': [
-    'Placards & Markings vorhanden, lesbar, korrekt (Compass Card, Limitations, INOP-Placards ↔ MEL/Techlog)',
-    'Panels/Instrumente: Beschädigungen, fehlende Knöpfe/Schalter, lose Teile, Displays ohne Pixelfehler',
-    'Windshields/Side Windows: Delamination, Kratzer, Risse, Heizung',
-    'Seats & Harnesses: Verstellung, Gurtschlösser, Rückhaltesystem, Bezüge',
-    'Oxygen Masks Crew: Sitz in Box, Test-/Flow-Anzeige, Schläuche',
-    'Circuit Breaker: gezogene/collared CBs ↔ Techlog/MEL abgeglichen',
-    'Floor/Lining/Sidewalls: Zustand, Verunreinigungen, Fremdkörper',
-    'Cockpit Door: Funktion, Locking, Peephole, Placards',
+    'Windshields & Side Windows – Delamination, Kratzer, Risse, Heizung',
+    'Seats incl. Observer – Verstellung, Harnesses/Gurtschlösser, Bezüge',
+    'Lights – Panel-/Flood-/Dome-/Map Lights, Annunciator Test',
+    'Placards & Markings – vorhanden, lesbar, korrekt (Compass Card, Limitations, INOP ↔ MEL/Techlog)',
+    'Zusätzlich: Panels/Displays, Crew Oxygen Masks, gezogene CBs ↔ Techlog, Cockpit Door',
   ],
   '4.3': [
-    'Seats: Recline, Tray Tables, Armrests, Life Vest unter Sitz, Seat Belts',
-    'Seat-/Row-Placards, No Smoking/Fasten Seatbelt, Exit Signs lesbar',
-    'Floor Path Marking / Escape Path Lighting vorhanden & intakt',
-    'PSU: Oxygen-Box-Klappen geschlossen, Reading Lights, Attendant Call',
-    'Overhead Bins: Verriegelung, Placards (max. Load), Beschädigungen',
-    'Galleys: Latches, Trolley Stops, Inserts, Wasser/Abfluss, Placards',
-    'Lavatories: Smoke Detector, Waste Bin Flap (Fire Containment), No-Smoking Placard, Ashtray',
-    'Doors/Exits: Slides armed-Anzeige, Assist Handles, Placards, Seals',
-    'Attendant Seats: Rückholung, Harness, Handset',
-    'Carpets/Linings/Sidewalls: Zustand, Brandflecken, lose Teile',
+    'Furniture general (e.g. bins, side walls, windscreens, floor area) – Beschädigungen, Bin-Verriegelung, lose Teile, Carpets',
+    'Windows – Kratzer, Risse, Shades',
+    'Passenger Seats (incl. seat belts, tables, armrests, seat pocket) – Recline, Life Vest unter Sitz',
+    'Attendant Seats – Rückholung, Harness',
+    'Lights – Cabin Lights, Reading Lights, Exit Signs, Floor Path Marking',
+    'Galley function / condition – Latches, Trolley Stops, Inserts, Wasser/Abfluss',
+    'Lavatories function / condition – Smoke Detector, Waste Bin Flap, Ashtray',
+    'Placards & Markings – No Smoking/Fasten Seatbelt, Row-/Bin-/Exit-Placards',
+    'Zusätzlich: PSU/Oxygen-Box-Klappen, Doors/Slides armed-Anzeige, Assist Handles',
   ],
 };
 
