@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.3';
+const APP_VERSION = '0.5.4';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -948,7 +948,10 @@ window.addEventListener('hashchange', async () => { await flush(); closeEditor()
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('sw.js').then(reg => {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // iOS prüft bei Home-Screen-Apps selten auf Updates -> beim Öffnen/Zurückkehren aktiv prüfen
+    reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
     reg.addEventListener('updatefound', () => {
       const w = reg.installing;
       w?.addEventListener('statechange', () => {
