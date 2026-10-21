@@ -126,3 +126,8 @@ textarea.inp{resize:vertical}
 .v-meta{font-size:13px;color:#cfd6de}
 
 .hints summary{cursor:pointer;margin:0}.hints[open] summary{margin-bottom:8px}.hints ul{margin:0;padding-left:20px}.hints li{font-size:14px;margin:4px 0;line-height:1.35}
+.sm-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}.sm-h .grow{font-size:14px}
+.link.bad{color:var(--bad)}
+.smbtn{white-space:nowrap}
+.bbar .fndbtn{min-width:0}
+.bbar .btn{white-space:nowrap}.bbar .btn.big:not(.grow){flex:0 0 auto;padding-left:14px;padding-right:14px}
