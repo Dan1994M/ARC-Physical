@@ -24,3 +24,12 @@ Pflichtfotos je Punkt: `minPhotos` (Standard 1).
   Pruefprotokoll.html  (Status aller Prüfpunkte, Findings, Foto-Galerie; druckbar als PDF)
   session.json         (Rohdaten)
 ```
+
+## Smoke-Test (vor jedem Push)
+
+```
+npm i --no-save playwright
+node tests/smoke.mjs        # optional: CHROMIUM_PATH=/pfad/zu/chromium
+```
+
+Prüft `sw.js` (nicht leer, Cache-Version = `APP_VERSION`, alle Assets vorhanden), App-Start, Foto, Finding, Sample, Finding-Report-PDF sowie ZIP-Export einteilig und mehrteilig.

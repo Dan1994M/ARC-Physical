@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.8.0';
+const APP_VERSION = '0.8.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -168,7 +168,7 @@ async function tx(stores, mode, fn) {
     Promise.resolve(fn(t)).then(v => { out = v; });
     t.oncomplete = () => res(out);
     t.onerror = () => rej(t.error);
-    t.onabort = () => rej(t.error || new Error('Transaktion abgebrochen'));
+    t.onabort = () => rej(t.error || new Error('Transaction aborted'));
   });
 }
 const get = (s, k) => tx([s], 'readonly', t => reqP(t.objectStore(s).get(k)));
@@ -233,6 +233,7 @@ async function touch() {
   const c = cur; if (!c) return;
   c.s.modifiedAt = nowISO(); c.s.summary = summary(c);
   reportReady = null; // Report nach Änderungen neu erzeugen
+  if (exportReady?.ready) URL.revokeObjectURL(exportReady.ready.url); exportReady = null;
   await put('sessions', c.s);
 }
 function revokeThumbs() { for (const u of thumbURLs.values()) URL.revokeObjectURL(u); thumbURLs.clear(); }
@@ -297,7 +298,7 @@ function drawScaled(img, max) {
   cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
   return cv;
 }
-const toBlob = (cv, q) => new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('Bildkonvertierung fehlgeschlagen')), 'image/jpeg', q));
+const toBlob = (cv, q) => new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('Image conversion failed')), 'image/jpeg', q));
 async function processImage(file) {
   const url = URL.createObjectURL(file);
   try {
@@ -560,11 +561,19 @@ function viewClose(c) {
   h += `<div class="card pad"><div class="lbl">Export (ZIP)</div>
   <div class="sm">${c.photos.length} photos · approx. ${fmtMB(size)} · folder structure per checklist item, findings folder, Findings.csv, inspection report</div>
   <div class="sm ${exp ? 'ok' : 'bad'}">${s.exportedAt ? (exp ? 'Exported ' + fmtDT(s.exportedAt) : 'Changed since last export') : 'Not exported yet'}</div>`;
-  if (exportReady && exportReady.sid === s.id) {
-    h += `<div class="okbox">ZIP ready: ${esc(exportReady.name)} (${fmtMB(exportReady.blob.size)})</div>
-    <button class="btn pri block" data-act="shareZip">Share / Save to Files</button>
-    <button class="btn block" data-act="downloadZip">Download</button>`;
-  } else h += `<button class="btn pri block" data-act="buildZip">Create ZIP</button>`;
+  const X = exportReady && exportReady.sid === s.id ? exportReady : null;
+  const plan = X || planExport(c);
+  if (plan.parts.length > 1) h += `<div class="hint">Large export – split into ${plan.parts.length} ZIP parts (max. ${fmtMB(PART_MAX())} each). Unzip all parts into the same folder.</div>`;
+  if (plan.parts.length === 1) {
+    h += X?.ready ? `<div class="okbox">ZIP ready: ${esc(X.ready.name)} (${fmtMB(X.ready.blob.size)})</div>
+      <button class="btn pri block" data-act="shareZip">Share / Save to Files</button><button class="btn block" data-act="downloadZip">Download</button>`
+      : `<button class="btn pri block" data-act="buildZip" data-idx="0">Create ZIP</button>`;
+  } else for (const pt of plan.parts) {
+    const rdy = X?.ready?.idx === pt.idx, done = X?.done.has(pt.idx);
+    h += `<div class="part"><div class="sm"><b>Part ${pt.idx + 1}/${plan.parts.length}</b> · ${pt.entries.length} files · approx. ${fmtMB(pt.size)}${pt.idx === 0 ? ' · incl. report, CSV, protocol' : ''} ${done ? '<span class="ok">✓ saved</span>' : ''}</div>
+    ${rdy ? `<button class="btn pri block" data-act="shareZip">Share / Save part ${pt.idx + 1}</button><button class="btn block" data-act="downloadZip">Download part ${pt.idx + 1}</button>`
+      : `<button class="btn ${done ? '' : 'pri'} block" data-act="buildZip" data-idx="${pt.idx}">${done ? 'Create again' : 'Create'} part ${pt.idx + 1}</button>`}</div>`;
+  }
   h += `</div><div class="card pad"><div class="lbl">Clean up device</div>
   <div class="mut sm">Permanently deletes this Physical incl. all photos from the app.</div>
   <button class="btn danger block" data-act="delSession">Delete Physical from device</button></div></main>`;
@@ -953,71 +962,93 @@ ${s.closeReason ? `<tr><td><b>Reason</b></td><td colspan="3">${esc(s.closeReason
 ${smTable(c)}<h2>Photo Evidence</h2>${gal || '<p>No photos.</p>'}</body></html>`;
 }
 
-async function buildZip() {
+// ZIP-Export in Teilen: iOS Safari hält das ZIP komplett im Arbeitsspeicher -> pro Teil max. PART_MAX.
+// Alle Teile haben dieselbe Ordnerstruktur und können in einen Ordner entpackt werden.
+const PART_MAX = () => window.__partMax || 250 * 1048576;
+function planExport(c) {
+  const s = c.s, L = leaves(s), root = safeName(`${s.date}_${s.reg}_ARC-Physical`);
+  const photos = [...c.photos].sort(byCreated), names = new Map(), annNames = new Map(), cnt = {}, entries = [];
+  for (const p of photos) {
+    const ext = extOf(p.type), f = p.findingId && c.findings.find(x => x.id === p.findingId);
+    let path;
+    if (f) { const fn = findingFolder(f); cnt[fn] = (cnt[fn] || 0) + 1; path = `Findings/${fn}/${fn}_${pad(cnt[fn])}.${ext}`; }
+    else {
+      const l = L.find(x => x.id === p.itemId) || { id: p.itemId, folder: 'Unassigned', parents: [] };
+      const d = p.docId && l.docs?.find(x => x.id === p.docId), sm = p.sampleId && (s.samples || []).find(x => x.id === p.sampleId);
+      if (sm) { cnt[sm.id] = (cnt[sm.id] || 0) + 1; path = `${leafPath(l)}/${smFile(s, sm)}_${pad(cnt[sm.id])}.${ext}`; }
+      else if (d) { cnt[d.id] = (cnt[d.id] || 0) + 1; path = `${leafPath(l)}/${safeName(d.id + ' ' + d.name)}_${pad(cnt[d.id])}.${ext}`; }
+      else { cnt[l.id] = (cnt[l.id] || 0) + 1; path = `${leafPath(l)}/${l.id}_${pad(cnt[l.id], 3)}.${ext}`; }
+    }
+    names.set(p.id, path);
+    entries.push({ key: p.id, path, date: p.createdAt, size: p.size || 0 });
+    if (p.annotated) { const ap = path.replace(/\.[^.]+$/, '_markiert.jpg'); annNames.set(p.id, ap); entries.push({ key: p.id + '#ann', path: ap, date: p.createdAt, size: (p.size || 0) * 0.6 }); }
+  }
+  // nach Pfad sortieren, damit Kategorien möglichst zusammen in einem Teil landen
+  entries.sort((a, b) => a.path.localeCompare(b.path, 'en', { numeric: true }));
+  const parts = []; let curP = null;
+  for (const e of entries) {
+    if (!curP || (curP.size + e.size > PART_MAX() && curP.entries.length)) parts.push(curP = { entries: [], size: 0 });
+    curP.entries.push(e); curP.size += e.size;
+  }
+  if (!parts.length) parts.push({ entries: [], size: 0 });
+  const n = parts.length;
+  parts.forEach((pt, i) => { pt.idx = i; pt.name = n > 1 ? `${root}_Part${i + 1}of${n}.zip` : root + '.zip'; });
+  return { sid: s.id, root, names, annNames, photos, parts, ready: null, done: new Set(), builtAt: nowISO() };
+}
+async function buildZip(idx = 0) {
   const c = cur, s = c.s;
   if (typeof JSZip === 'undefined') { toast('ZIP library not loaded'); return; }
   await flush();
-  const builtAt = nowISO();
-  const root = safeName(`${s.date}_${s.reg}_ARC-Physical`);
-  const zip = new JSZip(), R = zip.folder(root), L = leaves(s);
-  for (const l of L) R.folder(leafPath(l)); // vollständige Ordnerstruktur, auch leere
-  const photos = [...c.photos].sort(byCreated), names = new Map(), annNames = new Map(), cnt = {};
+  if (!exportReady || exportReady.sid !== s.id) exportReady = planExport(c);
+  const X = exportReady, part = X.parts[idx];
+  if (X.ready) { URL.revokeObjectURL(X.ready.url); X.ready = null; } // vorherigen Teil freigeben
+  const zip = new JSZip(), R = zip.folder(X.root);
   busy('Collecting photos …');
   try {
-    for (const p of photos) {
-      const ext = extOf(p.type), f = p.findingId && c.findings.find(x => x.id === p.findingId);
-      let path;
-      if (f) { const fn = findingFolder(f); cnt[fn] = (cnt[fn] || 0) + 1; path = `Findings/${fn}/${fn}_${pad(cnt[fn])}.${ext}`; }
-      else {
-        const l = L.find(x => x.id === p.itemId) || { id: p.itemId, folder: 'Unassigned', parents: [] };
-        const d = p.docId && l.docs?.find(x => x.id === p.docId), sm = p.sampleId && (s.samples || []).find(x => x.id === p.sampleId);
-        if (sm) { cnt[sm.id] = (cnt[sm.id] || 0) + 1; path = `${leafPath(l)}/${smFile(s, sm)}_${pad(cnt[sm.id])}.${ext}`; }
-        else if (d) { cnt[d.id] = (cnt[d.id] || 0) + 1; path = `${leafPath(l)}/${safeName(d.id + ' ' + d.name)}_${pad(cnt[d.id])}.${ext}`; }
-        else { cnt[l.id] = (cnt[l.id] || 0) + 1; path = `${leafPath(l)}/${l.id}_${pad(cnt[l.id], 3)}.${ext}`; }
-      }
-      names.set(p.id, path);
-      const b = await get('blobs', p.id);
-      if (b) R.file(path, b.buf, { binary: true, date: new Date(p.createdAt) });
-      if (p.annotated) { // markierte Kopie zusätzlich, Original bleibt unverändert
-        const a = await get('blobs', p.id + '#ann');
-        if (a) { const ap = path.replace(/\.[^.]+$/, '_markiert.jpg'); annNames.set(p.id, ap); R.file(ap, a.buf, { binary: true, date: new Date(p.createdAt) }); }
-      }
+    if (idx === 0) {
+      for (const l of leaves(s)) R.folder(leafPath(l)); // vollständige Ordnerstruktur, auch leere
+      const fs = [...c.findings].sort((a, b) => a.num - b.num);
+      const head = ['Finding', 'Item', 'Item Title', 'Description (Physical)', 'WO No.', 'Rectified', 'Rectification', 'No. of Photos', 'Folder', 'Created', 'WO Wording (manual)'];
+      const rows = fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'yes' : 'no', f.rect,
+        c.photos.filter(p => p.findingId === f.id).length, 'Findings/' + findingFolder(f), fmtDT(f.createdAt), '']);
+      const sHead = ['Sample', 'Type', 'Origin Item', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'No. of Photos', 'Created'];
+      const sRows = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [`${SAMPLE_KINDS[x.kind].item} ${smNo(x)}`, SAMPLE_KINDS[x.kind].label, smOrigin(s, x),
+        x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)]);
+      R.file('Samples.csv', '﻿' + [sHead, ...sRows].map(r => r.map(csvCell).join(';')).join('\r\n'));
+      if (c.findings.length) { busy('Creating finding report …'); R.file(reportName(s), await buildReportPDF(c)); }
+      R.file('Findings.csv', '﻿' + [head, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n'));
+      R.file('Pruefprotokoll.html', protocolHTML(c, X.names, X.annNames));
+      R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, exportedAt: X.builtAt, parts: X.parts.length, session: s, findings: fs,
+        photos: X.photos.map(p => ({ id: p.id, itemId: p.itemId, findingId: p.findingId, sampleId: p.sampleId || null, createdAt: p.createdAt, note: p.note, file: X.names.get(p.id), annotatedFile: X.annNames.get(p.id) || null })) }, null, 1));
     }
-    const fs = [...c.findings].sort((a, b) => a.num - b.num);
-    const head = ['Finding', 'Item', 'Item Title', 'Description (Physical)', 'WO No.', 'Rectified', 'Rectification', 'No. of Photos', 'Folder', 'Created', 'WO Wording (manual)'];
-    const rows = fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'yes' : 'no', f.rect,
-      c.photos.filter(p => p.findingId === f.id).length, 'Findings/' + findingFolder(f), fmtDT(f.createdAt), '']);
-    const sHead = ['Sample', 'Type', 'Origin Item', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'No. of Photos', 'Created'];
-    const sRows = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [`${SAMPLE_KINDS[x.kind].item} ${smNo(x)}`, SAMPLE_KINDS[x.kind].label, smOrigin(s, x),
-      x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)]);
-    R.file('Samples.csv', '\ufeff' + [sHead, ...sRows].map(r => r.map(csvCell).join(';')).join('\r\n'));
-    if (c.findings.length) { busy('Creating finding report …'); R.file(reportName(s), await buildReportPDF(c)); }
-    R.file('Findings.csv', '﻿' + [head, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n'));
-    R.file('Pruefprotokoll.html', protocolHTML(c, names, annNames));
-    R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, exportedAt: builtAt, session: s, findings: fs,
-      photos: photos.map(p => ({ id: p.id, itemId: p.itemId, findingId: p.findingId, createdAt: p.createdAt, note: p.note, file: names.get(p.id), annotatedFile: annNames.get(p.id) || null })) }, null, 1));
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true }, m => busy(`Creating ZIP … ${Math.round(m.percent)} %`));
-    if (exportReady?.url) URL.revokeObjectURL(exportReady.url);
-    exportReady = { sid: s.id, blob, name: root + '.zip', url: URL.createObjectURL(blob), builtAt };
+    let i = 0;
+    for (const e of part.entries) {
+      busy(`Collecting photos … ${++i}/${part.entries.length}`);
+      const b = await get('blobs', e.key);
+      if (b) R.file(e.path, b.buf, { binary: true, date: new Date(e.date) });
+    }
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true }, m => busy(`Creating ZIP${X.parts.length > 1 ? ` (part ${idx + 1}/${X.parts.length})` : ''} … ${Math.round(m.percent)} %`));
+    X.ready = { idx, blob, name: part.name, url: URL.createObjectURL(blob) };
   } catch (err) { console.error(err); toast('Export failed: ' + err.message); }
   finally { busy(false); }
   render();
 }
-async function markExported() {
-  cur.s.exportedAt = exportReady.builtAt > cur.s.modifiedAt ? exportReady.builtAt : cur.s.modifiedAt;
+async function markPartDone() {
+  const X = exportReady; X.done.add(X.ready.idx);
+  if (X.done.size === X.parts.length) cur.s.exportedAt = X.builtAt > cur.s.modifiedAt ? X.builtAt : cur.s.modifiedAt;
   await put('sessions', cur.s); render();
 }
 async function shareZip() {
-  const x = exportReady; if (!x) return;
+  const x = exportReady?.ready; if (!x) return;
   const file = new File([x.blob], x.name, { type: 'application/zip' });
   try {
-    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: x.name }); await markExported(); }
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: x.name }); await markPartDone(); }
     else downloadZip();
   } catch (err) { if (err.name !== 'AbortError') toast('Share failed: ' + err.message); }
 }
 function downloadZip() {
-  const a = document.createElement('a'); a.href = exportReady.url; a.download = exportReady.name;
-  document.body.appendChild(a); a.click(); a.remove(); markExported();
+  const x = exportReady.ready, a = document.createElement('a'); a.href = x.url; a.download = x.name;
+  document.body.appendChild(a); a.click(); a.remove(); markPartDone();
 }
 async function deleteSession() {
   const c = cur;
@@ -1089,7 +1120,7 @@ document.addEventListener('click', async e => {
         c.s.closedAt = nowISO(); await touch(); render(); break;
       }
       case 'reopen': c.s.closedAt = null; await touch(); render(); break;
-      case 'buildZip': await buildZip(); break;
+      case 'buildZip': await buildZip(+d.idx || 0); break;
       case 'shareZip': await shareZip(); break;
       case 'buildReport': {
         busy('Creating finding report …');
