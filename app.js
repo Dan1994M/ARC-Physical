@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.6.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -409,7 +409,7 @@ function viewItem(c, id) {
   ${st.status === 'na' ? `<div class="lbl">N/A reason</div><input class="inp" data-field="naReason" data-id="${l.id}" value="${esc(st.reason)}" placeholder="Required">` : ''}
   ${e.state === 'warn' ? `<div class="hint">${st.status === 'ok' ? (l.docs ? `Missing documents: ${e.miss.map(d => d.name).join(', ')}` : `Required photo missing (${e.n} / ${e.min})`) : 'N/A reason missing'}</div>` : ''}</div>`;
   const hi = HINTS[l.id];
-  if (hi?.length) h += `<details class="card pad hints" open><summary class="lbl">What to look for</summary><ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
+  if (hi?.length) h += `<details class="card pad hints"><summary class="lbl">What to look for</summary><ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
   const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated);
   if (l.docs) {
     for (const d of l.docs) {
