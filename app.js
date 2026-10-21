@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.7';
+const APP_VERSION = '0.5.8';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -54,6 +54,35 @@ const CHECKLIST = [
     { id: '5.7', title: 'Exterior – Avionics Bay', folder: '5.7 Exterior - Avionics Bay' } ] },
   { id: '6', title: 'A/C Physical Compliance with Records', folder: '6 AC Physical Compliance with Records' },
 ];
+
+/* ---------------- Gedankenstützen je Prüfpunkt ----------------
+   Werden immer aus dieser aktuellen Liste gelesen (nicht aus der
+   Session-Kopie) -> Änderungen wirken auch in laufenden Physicals.
+   Einfach Zeilen ergänzen/ändern; Key = Prüfpunkt-ID. */
+const HINTS = {
+  '4.2': [
+    'Placards & Markings vorhanden, lesbar, korrekt (Compass Card, Limitations, INOP-Placards ↔ MEL/Techlog)',
+    'Panels/Instrumente: Beschädigungen, fehlende Knöpfe/Schalter, lose Teile, Displays ohne Pixelfehler',
+    'Windshields/Side Windows: Delamination, Kratzer, Risse, Heizung',
+    'Seats & Harnesses: Verstellung, Gurtschlösser, Rückhaltesystem, Bezüge',
+    'Oxygen Masks Crew: Sitz in Box, Test-/Flow-Anzeige, Schläuche',
+    'Circuit Breaker: gezogene/collared CBs ↔ Techlog/MEL abgeglichen',
+    'Floor/Lining/Sidewalls: Zustand, Verunreinigungen, Fremdkörper',
+    'Cockpit Door: Funktion, Locking, Peephole, Placards',
+  ],
+  '4.3': [
+    'Seats: Recline, Tray Tables, Armrests, Life Vest unter Sitz, Seat Belts',
+    'Seat-/Row-Placards, No Smoking/Fasten Seatbelt, Exit Signs lesbar',
+    'Floor Path Marking / Escape Path Lighting vorhanden & intakt',
+    'PSU: Oxygen-Box-Klappen geschlossen, Reading Lights, Attendant Call',
+    'Overhead Bins: Verriegelung, Placards (max. Load), Beschädigungen',
+    'Galleys: Latches, Trolley Stops, Inserts, Wasser/Abfluss, Placards',
+    'Lavatories: Smoke Detector, Waste Bin Flap (Fire Containment), No-Smoking Placard, Ashtray',
+    'Doors/Exits: Slides armed-Anzeige, Assist Handles, Placards, Seals',
+    'Attendant Seats: Rückholung, Harness, Handset',
+    'Carpets/Linings/Sidewalls: Zustand, Brandflecken, lose Teile',
+  ],
+};
 
 const QUALITY = {
   original: { label: 'Original (volle Auflösung, groß)', max: 0 },
@@ -383,6 +412,8 @@ function viewItem(c, id) {
   ${[['open', 'Offen'], ['ok', 'Geprüft'], ['na', 'N/A']].map(([v, t]) => `<button data-act="setStatus" data-item="${l.id}" data-v="${v}" class="${st.status === v ? 'on ' + v : ''}">${t}</button>`).join('')}</div>
   ${st.status === 'na' ? `<div class="lbl">Begründung N/A</div><input class="inp" data-field="naReason" data-id="${l.id}" value="${esc(st.reason)}" placeholder="Pflichtfeld">` : ''}
   ${e.state === 'warn' ? `<div class="hint">${st.status === 'ok' ? (l.docs ? `Fehlende Dokumente: ${e.miss.map(d => d.name).join(', ')}` : `Pflichtfoto fehlt (${e.n} / ${e.min})`) : 'Begründung für N/A fehlt'}</div>` : ''}</div>`;
+  const hi = HINTS[l.id];
+  if (hi?.length) h += `<details class="card pad hints" open><summary class="lbl">Worauf achten</summary><ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
   const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated);
   if (l.docs) {
     for (const d of l.docs) {
