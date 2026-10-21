@@ -1,5 +1,5 @@
 // Bei jedem Update der App-Dateien die Version erhöhen.
-const CACHE = 'arc-physical-v0.4.2';
+const CACHE = 'arc-physical-v0.5.0';
 const ASSETS = ['./', './index.html', './app.js', './style.css', './jszip.min.js', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

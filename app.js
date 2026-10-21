@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.4.1';
+const APP_VERSION = '0.5.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -16,8 +16,14 @@ const CHECKLIST = [
     { id: '1.3', title: 'Lease- / Owner Plate + Manufacture Plate', folder: '1.3 Lease- Owner Plate + Manufacture Plate', minPhotos: 2 },
     { id: '1.4', title: 'Samples', folder: '1.4 Samples' } ] },
   { id: '2', title: 'A/C Documentation', folder: '2 AC Documentation', children: [
-    { id: '2.1', title: 'A/C Compliance with AFM', folder: '2.1 AC Compliance with AFM' },
-    { id: '2.2', title: 'On-Board Documentation / Techlog', folder: '2.2 On-Board Documentation - Techlog' } ] },
+    { id: '2.1', title: 'A/C Compliance with AFM', folder: '2.1 AC Compliance with AFM', children: [
+      { id: '2.1.1', title: 'EFB = Comply?', folder: '2.1.1 EFB', minPhotos: 0 },
+      { id: '2.1.2', title: 'Sample (TCDS, AFM, etc.)', folder: '2.1.2 Sample' } ] },
+    // docs: alle Fotos in einem Ordner, Dateiname beginnt mit Dokument-Nr.; je Pflichtdokument min. 1 Foto (mehrseitig möglich)
+    { id: '2.2', title: 'On-Board Documentation / Techlog', folder: '2.2 On-Board Documentation - Techlog', docs: [
+      { id: '2.2.1', name: 'CofA' }, { id: '2.2.2', name: 'CofR' }, { id: '2.2.3', name: 'Radio License' },
+      { id: '2.2.4', name: 'AOC' }, { id: '2.2.5', name: 'Noise Certificate' }, { id: '2.2.6', name: 'ARC' },
+      { id: '2.2.7', name: 'Insurance' }, { id: '2.2.8', name: 'TLB', optional: true } ] } ] },
   { id: '3', title: 'A/C Functional Checks', folder: '3 AC Functional Checks', children: [
     { id: '3.1', title: 'Check A/C Fluid Levels per CDU', folder: '3.1 Check AC Fluid Levels per CDU' },
     { id: '3.2', title: 'Initiate A/C Functional Checks as required', folder: '3.2 Initiate AC Functional Checks as required' } ] },
@@ -122,19 +128,24 @@ const itemState = (s, id) => (s.items[id] ||= { status: 'open', reason: '', note
 function evalItem(c, l) {
   const st = c.s.items[l.id] || { status: 'open', reason: '', note: '' };
   const n = c.photos.filter(p => p.itemId === l.id).length;
-  const min = l.minPhotos ?? DEFAULT_MIN_PHOTOS;
+  let min = l.minPhotos ?? DEFAULT_MIN_PHOTOS, ok = n >= min, miss = [];
+  if (l.docs) {
+    const req = l.docs.filter(d => !d.optional);
+    miss = req.filter(d => !c.photos.some(p => p.itemId === l.id && p.docId === d.id));
+    min = req.length; ok = !miss.length;
+  }
   const fnd = c.findings.filter(f => f.itemId === l.id).sort((a, b) => a.num - b.num);
   let state = 'open';
   if (st.status === 'na') state = st.reason?.trim() ? 'done' : 'warn';
-  else if (st.status === 'ok') state = n >= min ? 'done' : 'warn';
-  return { st, n, min, fnd, state };
+  else if (st.status === 'ok') state = ok ? 'done' : 'warn';
+  return { st, n, min, ok, miss, fnd, state };
 }
 function checkIssues(c) {
   const r = { open: [], noPhoto: [], noReason: [] };
   for (const l of leaves(c.s)) {
     const e = evalItem(c, l);
     if (e.st.status === 'open') r.open.push(l);
-    else if (e.st.status === 'ok' && e.n < e.min) r.noPhoto.push(l);
+    else if (e.st.status === 'ok' && !e.ok) r.noPhoto.push(l);
     else if (e.st.status === 'na' && !e.st.reason?.trim()) r.noReason.push(l);
   }
   const fs = [...c.findings].sort((a, b) => a.num - b.num);
@@ -217,7 +228,7 @@ async function addPhotos(files, ctx) {
   try {
     for (const file of files) {
       const r = await processImage(file);
-      const meta = { id: uid(), sessionId: c.s.id, itemId: ctx.item, findingId: fid || null, thumb: r.thumb,
+      const meta = { id: uid(), sessionId: c.s.id, itemId: ctx.item, findingId: fid || null, docId: (!fid && ctx.doc) || null, thumb: r.thumb,
         type: r.type, w: r.w, h: r.h, size: r.full.byteLength, createdAt: nowISO(), note: '' };
       await tx(['photos', 'blobs'], 'readwrite', t => {
         t.objectStore('photos').put(meta);
@@ -231,7 +242,7 @@ async function addPhotos(files, ctx) {
   if (ctx.newFinding) { location.hash = `#/s/${c.s.id}/f/${fid}`; return; }
   render();
   const n = c.photos.filter(p => p.itemId === ctx.item).length;
-  toast(`${added.length > 1 ? added.length + ' Fotos' : 'Foto'} gespeichert · ${ctx.item} (${n})`, 'Rückgängig', () => deletePhotos(added));
+  toast(`${added.length > 1 ? added.length + ' Fotos' : 'Foto'} gespeichert · ${ctx.doc || ctx.item} (${ctx.doc ? c.photos.filter(p => p.docId === ctx.doc).length : n})`, 'Rückgängig', () => deletePhotos(added));
 }
 async function deletePhotos(list) {
   const c = cur; if (!c) return;
@@ -300,7 +311,7 @@ async function viewHome() {
   h += `<main class="wrap"><button class="btn pri big block" data-act="newSession">+ Neues Physical</button>`;
   if (!ss.length) h += `<p class="empty">Noch keine Physicals erfasst.</p>`;
   for (const s of ss) {
-    const m = s.summary || { done: 0, total: 16, photos: 0, findings: 0, noWO: 0 };
+    const m = s.summary || { done: 0, total: 17, photos: 0, findings: 0, noWO: 0 };
     const pct = m.total ? Math.round(m.done / m.total * 100) : 0;
     const unexp = (m.photos || m.findings) && (!s.exportedAt || s.modifiedAt > s.exportedAt);
     h += `<a class="card sess" href="#/s/${s.id}"><div class="sess-h"><b>${esc(s.reg)}</b><span class="mut">${esc(fmtDay(s.date))}</span></div>
@@ -338,9 +349,18 @@ function viewItem(c, id) {
   h += `<main class="wrap has-bbar"><div class="card pad"><div class="lbl">Status</div><div class="seg">
   ${[['open', 'Offen'], ['ok', 'Geprüft'], ['na', 'N/A']].map(([v, t]) => `<button data-act="setStatus" data-item="${l.id}" data-v="${v}" class="${st.status === v ? 'on ' + v : ''}">${t}</button>`).join('')}</div>
   ${st.status === 'na' ? `<div class="lbl">Begründung N/A</div><input class="inp" data-field="naReason" data-id="${l.id}" value="${esc(st.reason)}" placeholder="Pflichtfeld">` : ''}
-  ${e.state === 'warn' ? `<div class="hint">${st.status === 'ok' ? `Pflichtfoto fehlt (${e.n} / ${e.min})` : 'Begründung für N/A fehlt'}</div>` : ''}</div>`;
+  ${e.state === 'warn' ? `<div class="hint">${st.status === 'ok' ? (l.docs ? `Fehlende Dokumente: ${e.miss.map(d => d.name).join(', ')}` : `Pflichtfoto fehlt (${e.n} / ${e.min})`) : 'Begründung für N/A fehlt'}</div>` : ''}</div>`;
   const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated);
-  h += `<div class="card pad"><div class="lbl">Fotos <span class="mut">${e.n}${e.min ? ` / min. ${e.min}` : ''}</span></div>${photoGrid(ph, 'item:' + l.id)}
+  if (l.docs) {
+    for (const d of l.docs) {
+      const dp = ph.filter(p => p.docId === d.id);
+      h += `<div class="card pad"><div class="lbl">${esc(d.id)} ${esc(d.name)}${d.optional ? ' <span class="mut">(if applicable)</span>' : ''} <span class="mut">${dp.length ? dp.length + ' Seite(n)' : ''}</span></div>${photoGrid(dp, 'd:' + d.id)}
+      <button class="btn" data-act="cam" data-item="${l.id}" data-doc="${d.id}">📷 Seite fotografieren</button>
+      <button class="link" data-act="library" data-item="${l.id}" data-doc="${d.id}">Aus Mediathek</button></div>`;
+    }
+    const rest = ph.filter(p => !p.docId && !p.findingId);
+    if (rest.length) h += `<div class="card pad"><div class="lbl">Sonstige Fotos</div>${photoGrid(rest, 'item:' + l.id)}</div>`;
+  } else h += `<div class="card pad"><div class="lbl">Fotos <span class="mut">${e.n}${e.min ? ` / min. ${e.min}` : ''}</span></div>${photoGrid(ph, 'item:' + l.id)}
   <button class="link" data-act="library" data-item="${l.id}">Aus Mediathek hinzufügen</button></div>`;
   h += `<div class="card pad"><div class="lbl">Findings</div>${e.fnd.length ? e.fnd.map(f => findingMini(c, f)).join('') : '<div class="mut sm">Keine</div>'}
   <button class="link" data-act="newFindingNoPhoto" data-item="${l.id}">Finding ohne Foto anlegen</button></div>`;
@@ -513,7 +533,7 @@ async function openViewer(pid, ctx, orig = false) {
 }
 function viewerList() {
   const i = viewer.ctx.indexOf(':'), k = viewer.ctx.slice(0, i), v = viewer.ctx.slice(i + 1);
-  return cur.photos.filter(p => k === 'f' ? p.findingId === v : p.itemId === v).sort(byCreated);
+  return cur.photos.filter(p => k === 'f' ? p.findingId === v : k === 'd' ? p.docId === v : p.itemId === v).sort(byCreated);
 }
 function renderViewer() {
   const c = cur, p = c.photos.find(x => x.id === viewer.pid);
@@ -719,7 +739,9 @@ async function buildZip() {
       if (f) { const fn = findingFolder(f); cnt[fn] = (cnt[fn] || 0) + 1; path = `Findings/${fn}/${fn}_${pad(cnt[fn])}.${ext}`; }
       else {
         const l = L.find(x => x.id === p.itemId) || { id: p.itemId, folder: 'Unzugeordnet', parents: [] };
-        cnt[l.id] = (cnt[l.id] || 0) + 1; path = `${leafPath(l)}/${l.id}_${pad(cnt[l.id], 3)}.${ext}`;
+        const d = p.docId && l.docs?.find(x => x.id === p.docId);
+        if (d) { cnt[d.id] = (cnt[d.id] || 0) + 1; path = `${leafPath(l)}/${safeName(d.id + ' ' + d.name)}_${pad(cnt[d.id])}.${ext}`; }
+        else { cnt[l.id] = (cnt[l.id] || 0) + 1; path = `${leafPath(l)}/${l.id}_${pad(cnt[l.id], 3)}.${ext}`; }
       }
       names.set(p.id, path);
       const b = await get('blobs', p.id);
@@ -777,9 +799,9 @@ document.addEventListener('click', async e => {
   try {
     switch (a) {
       // Kamera muss synchron im Klick ausgelöst werden (User-Geste)
-      case 'cam': capture = { item: d.item, fid: d.fid || null, newFinding: false }; $('#camIn').click(); break;
+      case 'cam': capture = { item: d.item, doc: d.doc || null, fid: d.fid || null, newFinding: false }; $('#camIn').click(); break;
       case 'camFinding': capture = { item: d.item, fid: null, newFinding: true }; $('#camIn').click(); break;
-      case 'library': capture = { item: d.item, fid: d.fid || null, newFinding: false }; $('#libIn').click(); break;
+      case 'library': capture = { item: d.item, doc: d.doc || null, fid: d.fid || null, newFinding: false }; $('#libIn').click(); break;
       case 'newFindingNoPhoto': { const f = await createFinding(d.item); location.hash = `#/s/${c.s.id}/f/${f.id}`; break; }
       case 'setStatus': { const st = itemState(c.s, d.item); st.status = d.v; st.changedAt = nowISO(); await touch(); render(); break; }
       case 'view': await openViewer(d.pid, d.ctx); break;
