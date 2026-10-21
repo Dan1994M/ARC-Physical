@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.7.0';
+const APP_VERSION = '0.7.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -113,6 +113,8 @@ function smFile(s, sm) {
   if (sm.kind === 'db' && sm.desc) parts.push(sm.desc.slice(0, 40));
   return safeName(parts.join('_'));
 }
+// Erlaubte Sample-Arten je Herkunft: Kat. 4 ohne D&B, Kat. 5 ohne LOPA
+const allowedKinds = id => Object.keys(SAMPLE_KINDS).filter(k => !(/^4\./.test(id || '') && k === 'db') && !(/^5\./.test(id || '') && k === 'lopa'));
 const defaultKind = id => /^4\.3/.test(id) ? 'lopa' : /^5\.[12]/.test(id) ? 'db' : 'comp';
 
 const QUALITY = {
@@ -336,6 +338,7 @@ async function addPhotos(files, ctx) {
   if (ctx.newFinding) { location.hash = `#/s/${c.s.id}/f/${fid}`; return; }
   render();
   const n = c.photos.filter(p => p.itemId === ctx.item).length;
+  if (ctx.smEdit) { const sm = c.s.samples.find(x => x.id === ctx.sample); if (sm) return smDetailSheet(sm); }
   toast(`${added.length > 1 ? added.length + ' photos' : 'Photo'} saved · ${ctx.sample ? ctx.item + ' ' + smNo(c.s.samples.find(x => x.id === ctx.sample) || { num: 0 }) : ctx.doc || ctx.item} (${ctx.sample ? c.photos.filter(p => p.sampleId === ctx.sample).length : ctx.doc ? c.photos.filter(p => p.docId === ctx.doc).length : n})`, 'Undo', () => deletePhotos(added));
 }
 async function deletePhotos(list) {
@@ -622,10 +625,16 @@ function sampleSheet() {
   const sm = smDraft, fixed = sm.fixed, sides = lopaSides(cur.s.type);
   if (sm.kind === 'lopa' && !sm.side) sm.side = sides[0];
   openSheet(`<h2>New sample</h2>${sm.origin ? `<div class="mut sm">Origin: ${esc(smOrigin(cur.s, sm))}</div>` : ''}
-  ${fixed ? '' : `<div class="seg" style="margin-top:12px">${Object.entries(SAMPLE_KINDS).map(([k, v]) => `<button data-act="smKind" data-v="${k}" class="${sm.kind === k ? 'on open' : ''}">${esc(v.label)}</button>`).join('')}</div>`}
-  ${smFields(sm, sides, true)}
+  ${fixed ? '' : `<div class="seg" style="margin-top:12px">${Object.entries(SAMPLE_KINDS).filter(([k]) => allowedKinds(sm.origin).includes(k)).map(([k, v]) => `<button data-act="smKind" data-v="${k}" class="${sm.kind === k ? 'on open' : ''}">${esc(v.label)}</button>`).join('')}</div>`}
+  ${sm.kind === 'comp' ? '<div class="mut sm" style="margin-top:12px">Take the photo first – P/N, S/N and description are entered afterwards.</div>' : smFields(sm, sides, true)}
   <div class="row2"><button class="btn" data-act="sheetCancel">Cancel</button><button class="btn pri" data-act="smCreate">📷 Save & photo</button></div>
   <button class="link" data-act="smCreate" data-src="lib">Save & choose from library</button>`);
+}
+function smDetailSheet(sm) {
+  openSheet(`<h2>${SAMPLE_KINDS[sm.kind].item} ${smNo(sm)} · ${esc(SAMPLE_KINDS[sm.kind].label)}</h2>${sm.origin ? `<div class="mut sm">Origin: ${esc(smOrigin(cur.s, sm))}</div>` : ''}
+  ${smFields(sm, lopaSides(cur.s.type))}
+  <div class="row2"><button class="btn pri" data-act="smDone">Done</button></div>`);
+  setTimeout(() => $('#sheet [data-field="sm_pn"]')?.focus(), 50);
 }
 function smReadSheet() { for (const k of ['pn', 'sn', 'desc', 'row', 'side']) { const el = $('#sm_' + k); if (el) smDraft[k] = el.value.trim(); } }
 
@@ -953,6 +962,7 @@ document.addEventListener('click', async e => {
       case 'newSession': sessionSheet(); break;
       case 'editSession': sessionSheet(c.s); break;
       case 'smNew': smDraft = { kind: d.kind || defaultKind(d.origin), origin: d.kind ? null : d.origin, fixed: !!d.kind }; sampleSheet(); break;
+      case 'smDone': closeSheet(); await flush(); render(); break;
       case 'smKind': smReadSheet(); smDraft.kind = d.v; sampleSheet(); break;
       case 'smCreate': { // synchron bis zum Kamera-Klick (User-Geste)
         smReadSheet();
@@ -962,7 +972,7 @@ document.addEventListener('click', async e => {
         const sm = { id: uid(), ...base, pn: base.kind === 'comp' ? base.pn || '' : '', sn: base.kind === 'comp' ? base.sn || '' : '',
           row: base.kind === 'lopa' ? base.row : '', side: base.kind === 'lopa' ? base.side : '', desc: base.desc || '', num: sq[smDraft.kind], createdAt: nowISO() };
         (c.s.samples ||= []).push(sm);
-        capture = { item: SAMPLE_KINDS[sm.kind].item, sample: sm.id, doc: null, fid: null, newFinding: false };
+        capture = { item: SAMPLE_KINDS[sm.kind].item, sample: sm.id, smEdit: sm.kind === 'comp', doc: null, fid: null, newFinding: false };
         $(d.src === 'lib' ? '#libIn' : '#camIn').click();
         closeSheet(); smDraft = null; await touch(); render(); break;
       }
