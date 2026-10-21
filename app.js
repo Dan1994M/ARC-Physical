@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.5.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -25,7 +25,11 @@ const CHECKLIST = [
       { id: '2.2.4', name: 'AOC' }, { id: '2.2.5', name: 'Noise Certificate' }, { id: '2.2.6', name: 'ARC' },
       { id: '2.2.7', name: 'Insurance' }, { id: '2.2.8', name: 'TLB', optional: true } ] } ] },
   { id: '3', title: 'A/C Functional Checks', folder: '3 AC Functional Checks', children: [
-    { id: '3.1', title: 'Check A/C Fluid Levels per CDU', folder: '3.1 Check AC Fluid Levels per CDU' },
+    { id: '3.1', title: 'Check A/C Fluid Levels per CDU', folder: '3.1 Check AC Fluid Levels per CDU', children: [
+      { id: '3.1.1', title: 'ENG Oil', folder: '3.1.1 ENG Oil' },
+      { id: '3.1.2', title: 'HYD', folder: '3.1.2 HYD' },
+      { id: '3.1.3', title: 'OXY', folder: '3.1.3 OXY' },
+      { id: '3.1.4', title: 'NAV Database', folder: '3.1.4 NAV Database' } ] },
     { id: '3.2', title: 'Initiate A/C Functional Checks as required', folder: '3.2 Initiate AC Functional Checks as required' } ] },
   { id: '4', title: 'A/C Interior Inspection', folder: '4 AC Interior Inspection', children: [
     { id: '4.1', title: 'Interior – Emergency Equipment (Cockpit & Cabin)', folder: '4.1 Interior - Emergency Equipment (Cockpit & Cabin)' },
@@ -311,7 +315,7 @@ async function viewHome() {
   h += `<main class="wrap"><button class="btn pri big block" data-act="newSession">+ Neues Physical</button>`;
   if (!ss.length) h += `<p class="empty">Noch keine Physicals erfasst.</p>`;
   for (const s of ss) {
-    const m = s.summary || { done: 0, total: 17, photos: 0, findings: 0, noWO: 0 };
+    const m = s.summary || { done: 0, total: 20, photos: 0, findings: 0, noWO: 0 };
     const pct = m.total ? Math.round(m.done / m.total * 100) : 0;
     const unexp = (m.photos || m.findings) && (!s.exportedAt || s.modifiedAt > s.exportedAt);
     h += `<a class="card sess" href="#/s/${s.id}"><div class="sess-h"><b>${esc(s.reg)}</b><span class="mut">${esc(fmtDay(s.date))}</span></div>
