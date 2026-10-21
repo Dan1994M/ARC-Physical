@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.4';
+const APP_VERSION = '0.5.5';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -23,11 +23,13 @@ const CHECKLIST = [
     { id: '2.2', title: 'On-Board Documentation / Techlog', folder: '2.2 On-Board Documentation - Techlog', docs: [
       { id: '2.2.1', name: 'CofA' }, { id: '2.2.2', name: 'CofR' }, { id: '2.2.3', name: 'Radio License' },
       { id: '2.2.4', name: 'AOC' }, { id: '2.2.5', name: 'Noise Certificate' }, { id: '2.2.6', name: 'ARC' },
-      { id: '2.2.7', name: 'Insurance' }, { id: '2.2.8', name: 'TLB', optional: true } ] } ] },
+      { id: '2.2.7', name: 'Insurance' }, { id: '2.2.8', name: 'TLB', optional: 'if applicable' } ] } ] },
   { id: '3', title: 'A/C Functional Checks', folder: '3 AC Functional Checks', children: [
     { id: '3.1', title: 'Check A/C Fluid Levels per CDU', folder: '3.1 Check AC Fluid Levels per CDU', docs: [
       { id: '3.1.1', name: 'ENG Oil' }, { id: '3.1.2', name: 'HYD' }, { id: '3.1.3', name: 'OXY' }, { id: '3.1.4', name: 'NAV Database' } ] },
-    { id: '3.2', title: 'Initiate A/C Functional Checks as required', folder: '3.2 Initiate AC Functional Checks as required' } ] },
+    { id: '3.2', title: 'Initiate A/C Functional Checks as required', folder: '3.2 Initiate AC Functional Checks as required', docs: [
+      { id: '3.2.1', name: 'Exterior Lights Check', optional: true }, { id: '3.2.2', name: 'Flaps - Slats - Spoiler Check', optional: true },
+      { id: '3.2.3', name: 'Cockpit Video System Check', optional: true }, { id: '3.2.4', name: 'Flight Control Check', optional: true } ] } ] },
   { id: '4', title: 'A/C Interior Inspection', folder: '4 AC Interior Inspection', children: [
     { id: '4.1', title: 'Interior – Emergency Equipment (Cockpit & Cabin)', folder: '4.1 Interior - Emergency Equipment (Cockpit & Cabin)' },
     { id: '4.2', title: 'Interior – Cockpit', folder: '4.2 Interior - Cockpit' },
@@ -383,7 +385,7 @@ function viewItem(c, id) {
   if (l.docs) {
     for (const d of l.docs) {
       const dp = ph.filter(p => p.docId === d.id);
-      h += `<div class="card pad"><div class="lbl">${esc(d.id)} ${esc(d.name)}${d.optional ? ' <span class="mut">(if applicable)</span>' : ''} <span class="mut">${dp.length ? dp.length + ' Foto(s)' : ''}</span></div>${photoGrid(dp, 'd:' + d.id)}
+      h += `<div class="card pad"><div class="lbl">${esc(d.id)} ${esc(d.name)}${d.optional ? ` <span class="mut">(${d.optional === true ? 'optional' : esc(d.optional)})</span>` : ''} <span class="mut">${dp.length ? dp.length + ' Foto(s)' : ''}</span></div>${photoGrid(dp, 'd:' + d.id)}
       <button class="btn" data-act="cam" data-item="${l.id}" data-doc="${d.id}">📷 Foto</button>
       <button class="link" data-act="library" data-item="${l.id}" data-doc="${d.id}">Aus Mediathek</button></div>`;
     }
