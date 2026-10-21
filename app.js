@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.7.3';
+const APP_VERSION = '0.8.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -178,7 +178,7 @@ const put = (s, v) => tx([s], 'readwrite', t => { t.objectStore(s).put(v); });
 
 /* ---------------- Modell ---------------- */
 let cur = null; // { s, findings, photos }
-let capture = null, fFilter = 'all', exportReady = null, viewer = null;
+let capture = null, fFilter = 'all', exportReady = null, viewer = null, reportReady = null;
 const thumbURLs = new Map();
 
 // Beliebig tiefe Verschachtelung: nur Knoten ohne `children` sind prüfbare Punkte
@@ -232,12 +232,13 @@ function summary(c) {
 async function touch() {
   const c = cur; if (!c) return;
   c.s.modifiedAt = nowISO(); c.s.summary = summary(c);
+  reportReady = null; // Report nach Änderungen neu erzeugen
   await put('sessions', c.s);
 }
 function revokeThumbs() { for (const u of thumbURLs.values()) URL.revokeObjectURL(u); thumbURLs.clear(); }
 async function loadSession(id) {
   if (cur && cur.s.id === id) return cur;
-  revokeThumbs(); cur = null; exportReady = null;
+  revokeThumbs(); cur = null; exportReady = null; reportReady = null;
   const s = await get('sessions', id); if (!s) return null;
   const [findings, photos] = await Promise.all([bySession('findings', id), bySession('photos', id)]);
   cur = { s, findings, photos };
@@ -376,7 +377,7 @@ function tabs(c, active) {
 }
 function photoGrid(ph, ctx) {
   if (!ph.length) return '<div class="mut sm">No photos yet</div>';
-  return `<div class="grid">${ph.map(p => `<button class="ph" data-act="view" data-pid="${p.id}" data-ctx="${esc(ctx)}">${p.thumb ? `<img src="${thumbURL(p)}" alt="" loading="lazy">` : '<span class="noth">Photo</span>'}${p.findingId ? `<span class="ph-f">${fNo(cur.findings.find(f => f.id === p.findingId) || { num: 0 })}</span>` : ''}</button>`).join('')}</div>`;
+  return `<div class="grid">${ph.map(p => `<button class="ph" data-act="view" data-pid="${p.id}" data-ctx="${esc(ctx)}">${p.thumb ? `<img src="${thumbURL(p)}" alt="" loading="lazy">` : '<span class="noth">Photo</span>'}${p.findingId ? `<span class="ph-f">${fNo(cur.findings.find(f => f.id === p.findingId) || { num: 0 })}</span>` : ''}${p.findingId && inReport(p) ? '<span class="ph-r">PDF</span>' : ''}</button>`).join('')}</div>`;
 }
 function itemSelect(s, val, field, extra = '') {
   return `<select class="inp" data-field="${field}" ${extra}>${leaves(s).map(l => `<option value="${esc(l.id)}" ${l.id === val ? 'selected' : ''}>${esc(l.id + ' ' + l.title)}</option>`).join('')}</select>`;
@@ -497,6 +498,7 @@ function viewFinding(c, fid) {
   h += `<main class="wrap has-bbar"><div class="card pad"><div class="lbl">Description</div>
   <textarea class="inp" rows="3" data-field="fText" data-fid="${f.id}" placeholder="Short description (dictate via keyboard mic)">${esc(f.text)}</textarea></div>`;
   h += `<div class="card pad"><div class="lbl">Photos <span class="mut">${ph.length}</span></div>${photoGrid(ph, 'f:' + f.id)}
+  ${ph.length > 1 ? '<div class="mut sm">Photos marked PDF go into the finding report – tap a photo to change.</div>' : ''}
   <button class="link" data-act="library" data-item="${f.itemId}" data-fid="${f.id}">Add from library</button></div>`;
   h += `<div class="card pad"><div class="lbl">Work Order</div>
   <input class="inp" data-field="fWO" data-fid="${f.id}" value="${esc(f.wo)}" placeholder="WO number" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
@@ -514,6 +516,13 @@ function viewFindings(c) {
   const flt = { all: () => true, nowo: f => !f.wo?.trim(), wo: f => f.wo?.trim() && !f.rectified, rect: f => f.rectified };
   const lbl = { all: 'All', nowo: 'No WO', wo: 'WO open', rect: 'Rectified' };
   h += `<div class="filters">${Object.keys(flt).map(k => `<button class="chip-btn ${fFilter === k ? 'on' : ''}" data-act="fFilter" data-v="${k}">${lbl[k]} ${all.filter(flt[k]).length}</button>`).join('')}</div>`;
+  if (all.length) {
+    h += reportReady && reportReady.sid === c.s.id
+      ? `<div class="card pad"><div class="okbox">Report ready: ${esc(reportReady.name)} (${fmtMB(reportReady.blob.size)})</div>
+        <button class="btn pri block" data-act="shareReport">Share / Save to Files</button><button class="btn block" data-act="openReport">Open</button>
+        <button class="link" data-act="buildReport">Regenerate</button></div>`
+      : `<button class="btn pri block" data-act="buildReport" style="margin-bottom:12px">📄 Create finding report (PDF)</button>`;
+  }
   const list = all.filter(flt[fFilter] || flt.all);
   if (!list.length) h += '<p class="empty">No findings in this view.</p>';
   for (const f of list) {
@@ -694,6 +703,7 @@ function renderViewer() {
   <label>Finding</label><select class="inp" data-field="vFinding"><option value="">– no finding (evidence photo) –</option>
   ${[...c.findings].sort((a, b) => a.num - b.num).map(f => `<option value="${f.id}" ${p.findingId === f.id ? 'selected' : ''}>${fNo(f)} · ${esc(f.itemId)} ${esc((f.text || '').slice(0, 30))}</option>`).join('')}
   <option value="__new">+ New finding from this photo</option></select>
+  ${p.findingId ? `<label class="chk"><input type="checkbox" data-field="vReport" ${inReport(p) ? 'checked' : ''}> Include in finding report</label>` : ''}
   <label>Note</label><input class="inp" data-field="vNote" value="${esc(p.note)}" placeholder="optional"></div>`;
   el.hidden = false;
 }
@@ -843,6 +853,78 @@ function smTable(c) {
   return `<h2>Samples</h2>${all.length ? `<table><tr><th>No.</th><th>Type</th><th>Origin</th><th>P/N</th><th>S/N</th><th>Row / Seats</th><th>Description</th><th>Photos</th></tr>${all.map(x =>
     `<tr><td>${SAMPLE_KINDS[x.kind].item} ${smNo(x)}</td><td>${esc(SAMPLE_KINDS[x.kind].label)}</td><td>${esc(smOrigin(c.s, x))}</td><td>${esc(x.pn)}</td><td>${esc(x.sn)}</td><td>${x.row ? esc(x.row + ' ' + x.side) : ''}</td><td>${esc(x.desc)}</td><td>${c.photos.filter(p => p.sampleId === x.id).length}</td></tr>`).join('')}</table>` : '<p>No samples.</p>'}`;
 }
+/* ---------------- Finding Report (PDF) ---------------- */
+// Fotos im Report: explizit markierte, sonst das erste Foto des Findings
+function reportPhotos(c, fid) {
+  const ph = c.photos.filter(p => p.findingId === fid).sort(byCreated), sel = ph.filter(p => p.inReport);
+  return sel.length ? sel : ph.slice(0, 1);
+}
+const inReport = p => reportPhotos(cur, p.findingId).includes(p);
+const reportName = s => safeName(`${s.reg}_Finding Report_${todayYMD()}.pdf`);
+const pdfTxt = t => String(t ?? '').replace(/[↔→]/g, '-').replace(/[^\x20-\x7E\xA0-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u20AC\n]/g, '?');
+async function pdfImage(p) {
+  const b = (p.annotated && await get('blobs', p.id + '#ann')) || await get('blobs', p.id); if (!b) return null;
+  const url = URL.createObjectURL(new Blob([b.buf], { type: b.type }));
+  try {
+    const img = new Image(); img.src = url; await img.decode();
+    const cv = drawScaled(img, 1400), r = { data: cv.toDataURL('image/jpeg', 0.82), w: cv.width, h: cv.height };
+    cv.width = cv.height = 0; return r;
+  } catch { return null; } finally { URL.revokeObjectURL(url); }
+}
+const RPT = { m: 12, picW: 78, woW: 30, imgH: 56, maxImg: 4 };
+async function buildReportPDF(c) {
+  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const s = c.s, W = 210, H = 297, m = RPT.m, cw = W - 2 * m - RPT.picW - RPT.woW, x1 = m + RPT.picW, x2 = x1 + cw, top = 30, bottom = H - 14;
+  const head = () => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text(pdfTxt(s.reg), m, 15);
+    doc.setFontSize(12); doc.text('Physical Review Findings', m + doc.getTextWidth(pdfTxt(s.reg)) * 15 / 12 + 4, 15);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text(pdfTxt([s.msn && 'MSN ' + s.msn, s.type].filter(Boolean).join(' · ')), m, 20.5);
+    doc.text('Generated ' + fmtDT(nowISO()), W - m, 20.5, { align: 'right' });
+    doc.setFillColor(235, 238, 242); doc.rect(m, 23, W - 2 * m, 7, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    doc.text('Picture', m + 2, 27.6); doc.text('Complaint', x1 + 2, 27.6); doc.text('WO', x2 + 2, 27.6);
+    doc.setDrawColor(170); doc.setLineWidth(0.2); doc.rect(m, 23, W - 2 * m, 7);
+  };
+  head();
+  let y = top;
+  const fs = [...c.findings].sort((a, b) => a.num - b.num);
+  for (const f of fs) {
+    busy(`Creating finding report … ${fNo(f)}`);
+    const l = leafById(s, f.itemId), sel = reportPhotos(c, f.id), shown = sel.slice(0, RPT.maxImg);
+    const imgs = []; for (const p of shown) imgs.push(await pdfImage(p));
+    doc.setFontSize(9);
+    const loc = pdfTxt(`${fNo(f)} · ${l ? l.id + ' ' + l.title : f.itemId}`);
+    const body = doc.splitTextToSize(pdfTxt(f.text || '(no description)'), cw - 4);
+    const rect = f.rectified ? doc.splitTextToSize(pdfTxt('Rectified' + (f.rect ? ': ' + f.rect : '')), cw - 4) : [];
+    const lh = 4.2, textH = 4 + lh * (1 + body.length + (rect.length ? rect.length + 0.5 : 0)) + 2;
+    const imgH = imgs.length ? imgs.length * (RPT.imgH + 2) + 2 + (sel.length > shown.length ? 5 : 0) : 12;
+    const rowH = Math.max(textH, imgH, 16);
+    if (y + rowH > bottom) { doc.addPage(); head(); y = top; }
+    doc.setDrawColor(170); doc.setLineWidth(0.2);
+    doc.rect(m, y, RPT.picW, rowH); doc.rect(x1, y, cw, rowH); doc.rect(x2, y, RPT.woW, rowH);
+    let iy = y + 2;
+    if (!imgs.length) { doc.setFont('helvetica', 'italic'); doc.setTextColor(120); doc.text(sel.length ? 'image not displayable' : 'no photo', m + 2, y + 6); doc.setTextColor(0); }
+    for (const im of imgs) {
+      if (im) { const bw = RPT.picW - 4, k = Math.min(bw / im.w, RPT.imgH / im.h), w = im.w * k, h = im.h * k;
+        doc.addImage(im.data, 'JPEG', m + 2 + (bw - w) / 2, iy + (RPT.imgH - h) / 2, w, h); }
+      else { doc.setFont('helvetica', 'italic'); doc.setTextColor(120); doc.text('image not displayable', m + 2, iy + 5); doc.setTextColor(0); }
+      iy += RPT.imgH + 2;
+    }
+    if (sel.length > shown.length) { doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.text(`+${sel.length - shown.length} more photo(s)`, m + 2, iy + 2); doc.setFontSize(9); }
+    let ty = y + 5;
+    doc.setFont('helvetica', 'bold'); doc.text(loc, x1 + 2, ty, { maxWidth: cw - 4 }); ty += lh + 0.6;
+    doc.setFont('helvetica', 'normal'); doc.text(body, x1 + 2, ty); ty += lh * body.length;
+    if (rect.length) { ty += lh * 0.5; doc.setFont('helvetica', 'italic'); doc.setTextColor(0, 110, 50); doc.text(rect, x1 + 2, ty); doc.setTextColor(0); }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(doc.splitTextToSize(pdfTxt(f.wo || '–'), RPT.woW - 4), x2 + 2, y + 5.2);
+    y += rowH;
+  }
+  if (!fs.length) { doc.setFont('helvetica', 'italic'); doc.text('No findings.', m, top + 6); }
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90);
+    doc.text(`Page ${i} of ${n}`, W / 2, H - 7, { align: 'center' }); doc.text(pdfTxt(`${s.reg} · Physical Review Findings`), m, H - 7); doc.setTextColor(0); }
+  return doc.output('blob');
+}
+
 function protocolHTML(c, names, annNames) {
   const s = c.s, L = leaves(s), iss = checkIssues(c), stl = { open: 'open', ok: 'checked', na: 'N/A' };
   const rows = L.map(l => {
@@ -909,6 +991,7 @@ async function buildZip() {
     const sRows = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [`${SAMPLE_KINDS[x.kind].item} ${smNo(x)}`, SAMPLE_KINDS[x.kind].label, smOrigin(s, x),
       x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)]);
     R.file('Samples.csv', '\ufeff' + [sHead, ...sRows].map(r => r.map(csvCell).join(';')).join('\r\n'));
+    if (c.findings.length) { busy('Creating finding report …'); R.file(reportName(s), await buildReportPDF(c)); }
     R.file('Findings.csv', '﻿' + [head, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n'));
     R.file('Pruefprotokoll.html', protocolHTML(c, names, annNames));
     R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, exportedAt: builtAt, session: s, findings: fs,
@@ -943,7 +1026,7 @@ async function deleteSession() {
     for (const f of c.findings) t.objectStore('findings').delete(f.id);
     for (const p of c.photos) { t.objectStore('photos').delete(p.id); t.objectStore('blobs').delete(p.id); t.objectStore('blobs').delete(p.id + '#ann'); }
   });
-  revokeThumbs(); cur = null; exportReady = null; location.hash = '#/';
+  revokeThumbs(); cur = null; exportReady = null; reportReady = null; location.hash = '#/';
 }
 
 /* ---------------- Events ---------------- */
@@ -1008,6 +1091,19 @@ document.addEventListener('click', async e => {
       case 'reopen': c.s.closedAt = null; await touch(); render(); break;
       case 'buildZip': await buildZip(); break;
       case 'shareZip': await shareZip(); break;
+      case 'buildReport': {
+        busy('Creating finding report …');
+        try { const blob = await buildReportPDF(c); reportReady = { sid: c.s.id, blob, name: reportName(c.s), url: URL.createObjectURL(blob) }; }
+        finally { busy(false); }
+        render(); break;
+      }
+      case 'shareReport': {
+        const x = reportReady, file = new File([x.blob], x.name, { type: 'application/pdf' });
+        try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: x.name }); else window.open(x.url, '_blank'); }
+        catch (err) { if (err.name !== 'AbortError') toast('Share failed: ' + err.message); }
+        break;
+      }
+      case 'openReport': window.open(reportReady.url, '_blank'); break;
       case 'downloadZip': downloadZip(); break;
       case 'delSession': {
         const exp = c.s.exportedAt && c.s.modifiedAt <= c.s.exportedAt;
@@ -1057,6 +1153,11 @@ async function onField(el, commit) {
     case 'sm_pn': case 'sm_sn': case 'sm_desc': case 'sm_row': case 'sm_side': {
       const sm = c.s.samples.find(x => x.id === el.dataset.sid); sm[f.slice(3)] = typeof v === 'string' ? v.trim() : v; sessDirty = true; schedule(); break;
     }
+    case 'vReport': if (commit) {
+      const p = c.photos.find(x => x.id === viewer.pid), fp = c.photos.filter(x => x.findingId === p.findingId);
+      if (!fp.some(x => x.inReport)) { const d0 = reportPhotos(c, p.findingId)[0]; if (d0) d0.inReport = true; } // Default explizit machen
+      p.inReport = v; await savePhotoMetas(fp); await touch(); reportReady = null;
+    } break;
     case 'vNote': { const p = c.photos.find(x => x.id === viewer.pid); p.note = v; if (commit) { await savePhotoMetas([p]); await touch(); } break; }
     case 'vItem': if (commit) {
       const p = c.photos.find(x => x.id === viewer.pid); p.itemId = v;

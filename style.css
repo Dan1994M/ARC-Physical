@@ -131,3 +131,4 @@ textarea.inp{resize:vertical}
 .smbtn{white-space:nowrap}
 .bbar .fndbtn{min-width:0}
 .bbar .btn{white-space:nowrap}.bbar .btn.big:not(.grow){flex:0 0 auto;padding-left:14px;padding-right:14px}
+.ph-r{position:absolute;right:4px;bottom:4px;font-size:10px;font-weight:800;padding:1px 5px;border-radius:6px;background:var(--ok);color:#fff}
