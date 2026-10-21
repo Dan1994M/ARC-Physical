@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.2';
+const APP_VERSION = '0.5.3';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -171,7 +171,35 @@ async function loadSession(id) {
   revokeThumbs(); cur = null; exportReady = null;
   const s = await get('sessions', id); if (!s) return null;
   const [findings, photos] = await Promise.all([bySession('findings', id), bySession('photos', id)]);
-  return (cur = { s, findings, photos });
+  cur = { s, findings, photos };
+  if (!s.closedAt) await syncChecklist(cur);
+  return cur;
+}
+// Offene Physicals übernehmen die aktuelle Prüfliste; abgeschlossene bleiben unverändert.
+// Fotos/Findings auf entfallenen Punkten werden umgehängt (Doku-Nr. -> docs, sonst erster Unterpunkt).
+async function syncChecklist(c) {
+  const s = c.s, next = JSON.stringify(CHECKLIST);
+  if (JSON.stringify(s.checklist) === next) return;
+  s.checklist = JSON.parse(next);
+  const L = leaves(s), ids = new Set(L.map(l => l.id));
+  const map = id => {
+    if (ids.has(id)) return null;
+    const dl = L.find(l => l.docs?.some(d => d.id === id));
+    if (dl) return { itemId: dl.id, docId: id };
+    const ch = L.find(l => l.id.startsWith(id + '.')) || L.find(l => id.startsWith(l.id + '.'));
+    return ch ? { itemId: ch.id } : null;
+  };
+  const ph = [], fn = [];
+  for (const p of c.photos) {
+    const m = map(p.itemId);
+    if (m) { p.itemId = m.itemId; if (m.docId && !p.findingId) p.docId = m.docId; ph.push(p); }
+    else if (p.docId && !L.find(l => l.id === p.itemId)?.docs?.some(d => d.id === p.docId)) { p.docId = null; ph.push(p); }
+  }
+  for (const f of c.findings) { const m = map(f.itemId); if (m) { f.itemId = m.itemId; fn.push(f); } }
+  for (const [k, v] of Object.entries(s.items)) { const m = map(k); if (m && !s.items[m.itemId]) s.items[m.itemId] = v; }
+  if (ph.length) await savePhotoMetas(ph);
+  if (fn.length) await tx(['findings'], 'readwrite', t => { for (const f of fn) t.objectStore('findings').put(f); });
+  await touch();
 }
 function thumbURL(p) {
   if (!p.thumb) return '';
