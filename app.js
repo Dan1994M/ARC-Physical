@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.9.0';
+const APP_VERSION = '0.9.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -388,7 +388,7 @@ function tabs(c, active) {
   const ps = prepState(c.s);
   return `<nav class="tabs"><a href="${b}/prep" class="${active === 'prep' ? 'on' : ''}">Prep${ps.done < ps.total ? ` <span class="dot"></span>` : ' ✓'}</a><a href="${b}" class="${active === 'list' ? 'on' : ''}">Checklist</a>
   <a href="${b}/findings" class="${active === 'findings' ? 'on' : ''}">Findings${c.findings.length ? ` (${c.findings.length})` : ''}</a>
-  <a href="${b}/close" class="${active === 'close' ? 'on' : ''}">Close-out${iss.count ? ` <span class="dot"></span>` : ''}</a></nav>`;
+  <a href="${b}/close" class="${active === 'close' ? 'on' : ''}">Finalize${iss.count ? ` <span class="dot"></span>` : ''}</a></nav>`;
 }
 function photoGrid(ph, ctx) {
   if (!ph.length) return '<div class="mut sm">No photos yet</div>';

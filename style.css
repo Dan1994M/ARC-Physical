@@ -135,3 +135,4 @@ textarea.inp{resize:vertical}
 .part{padding:10px 0;border-top:1px solid var(--line)}.part:first-of-type{border-top:0}
 .chk.prep{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);margin:0}.chk.prep input{margin-top:3px;flex:0 0 auto;width:20px;height:20px}
 .tabs a{white-space:nowrap}
+@media (max-width:380px){.tabs a{font-size:14px;padding-left:2px;padding-right:2px}}
