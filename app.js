@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.5.1';
+const APP_VERSION = '0.5.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -25,11 +25,8 @@ const CHECKLIST = [
       { id: '2.2.4', name: 'AOC' }, { id: '2.2.5', name: 'Noise Certificate' }, { id: '2.2.6', name: 'ARC' },
       { id: '2.2.7', name: 'Insurance' }, { id: '2.2.8', name: 'TLB', optional: true } ] } ] },
   { id: '3', title: 'A/C Functional Checks', folder: '3 AC Functional Checks', children: [
-    { id: '3.1', title: 'Check A/C Fluid Levels per CDU', folder: '3.1 Check AC Fluid Levels per CDU', children: [
-      { id: '3.1.1', title: 'ENG Oil', folder: '3.1.1 ENG Oil' },
-      { id: '3.1.2', title: 'HYD', folder: '3.1.2 HYD' },
-      { id: '3.1.3', title: 'OXY', folder: '3.1.3 OXY' },
-      { id: '3.1.4', title: 'NAV Database', folder: '3.1.4 NAV Database' } ] },
+    { id: '3.1', title: 'Check A/C Fluid Levels per CDU', folder: '3.1 Check AC Fluid Levels per CDU', docs: [
+      { id: '3.1.1', name: 'ENG Oil' }, { id: '3.1.2', name: 'HYD' }, { id: '3.1.3', name: 'OXY' }, { id: '3.1.4', name: 'NAV Database' } ] },
     { id: '3.2', title: 'Initiate A/C Functional Checks as required', folder: '3.2 Initiate AC Functional Checks as required' } ] },
   { id: '4', title: 'A/C Interior Inspection', folder: '4 AC Interior Inspection', children: [
     { id: '4.1', title: 'Interior – Emergency Equipment (Cockpit & Cabin)', folder: '4.1 Interior - Emergency Equipment (Cockpit & Cabin)' },
@@ -315,7 +312,7 @@ async function viewHome() {
   h += `<main class="wrap"><button class="btn pri big block" data-act="newSession">+ Neues Physical</button>`;
   if (!ss.length) h += `<p class="empty">Noch keine Physicals erfasst.</p>`;
   for (const s of ss) {
-    const m = s.summary || { done: 0, total: 20, photos: 0, findings: 0, noWO: 0 };
+    const m = s.summary || { done: 0, total: 17, photos: 0, findings: 0, noWO: 0 };
     const pct = m.total ? Math.round(m.done / m.total * 100) : 0;
     const unexp = (m.photos || m.findings) && (!s.exportedAt || s.modifiedAt > s.exportedAt);
     h += `<a class="card sess" href="#/s/${s.id}"><div class="sess-h"><b>${esc(s.reg)}</b><span class="mut">${esc(fmtDay(s.date))}</span></div>
@@ -358,8 +355,8 @@ function viewItem(c, id) {
   if (l.docs) {
     for (const d of l.docs) {
       const dp = ph.filter(p => p.docId === d.id);
-      h += `<div class="card pad"><div class="lbl">${esc(d.id)} ${esc(d.name)}${d.optional ? ' <span class="mut">(if applicable)</span>' : ''} <span class="mut">${dp.length ? dp.length + ' Seite(n)' : ''}</span></div>${photoGrid(dp, 'd:' + d.id)}
-      <button class="btn" data-act="cam" data-item="${l.id}" data-doc="${d.id}">📷 Seite fotografieren</button>
+      h += `<div class="card pad"><div class="lbl">${esc(d.id)} ${esc(d.name)}${d.optional ? ' <span class="mut">(if applicable)</span>' : ''} <span class="mut">${dp.length ? dp.length + ' Foto(s)' : ''}</span></div>${photoGrid(dp, 'd:' + d.id)}
+      <button class="btn" data-act="cam" data-item="${l.id}" data-doc="${d.id}">📷 Foto</button>
       <button class="link" data-act="library" data-item="${l.id}" data-doc="${d.id}">Aus Mediathek</button></div>`;
     }
     const rest = ph.filter(p => !p.docId && !p.findingId);
