@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.8.1';
+const APP_VERSION = '0.8.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -26,7 +26,7 @@ const CHECKLIST = [
       { id: '2.2.7', name: 'Insurance' }, { id: '2.2.8', name: 'TLB', optional: 'if applicable' } ] } ] },
   { id: '3', title: 'A/C Functional Checks', folder: '3 AC Functional Checks', children: [
     { id: '3.1', title: 'Check A/C Fluid Levels per CDU', folder: '3.1 Check AC Fluid Levels per CDU', docs: [
-      { id: '3.1.1', name: 'ENG Oil' }, { id: '3.1.2', name: 'HYD' }, { id: '3.1.3', name: 'OXY' }, { id: '3.1.4', name: 'NAV Database' } ] },
+      { id: '3.1.1', name: 'ENG Oil' }, { id: '3.1.2', name: 'HYD' }, { id: '3.1.3', name: 'OXY' }, { id: '3.1.4', name: 'NAV Database' }, { id: '3.1.5', name: 'APU Hours + Cycles' } ] },
     { id: '3.2', title: 'Initiate A/C Functional Checks as required', folder: '3.2 Initiate AC Functional Checks as required', docs: [
       { id: '3.2.1', name: 'Exterior Lights Check', optional: true }, { id: '3.2.2', name: 'Flaps - Slats - Spoiler Check', optional: true },
       { id: '3.2.3', name: 'Cockpit Video System Check', optional: true }, { id: '3.2.4', name: 'Flight Control Check', optional: true } ] } ] },
@@ -40,9 +40,9 @@ const CHECKLIST = [
     { id: '5.1', title: 'Exterior – A/C General Condition', folder: '5.1 Exterior - AC General Condition' },
     { id: '5.2', title: 'Exterior – Structures Condition', folder: '5.2 Exterior - Structures Condition' },
     { id: '5.3', title: 'Exterior – Engine Condition', folder: '5.3 Exterior - Engine Condition', children: [
-      { id: '5.3.1', title: 'Engine #1', folder: '5.3.1 Engine 1' },
-      { id: '5.3.2', title: 'Engine #2', folder: '5.3.2 Engine 2' },
-      { id: '5.3.3', title: 'APU', folder: '5.3.3 APU' } ] },
+      { id: '5.3.1', title: 'Engine #1', folder: '5.3.1 Engine 1', docs: [{ id: '5.3.1.1', name: 'Manufacture Plate' }] },
+      { id: '5.3.2', title: 'Engine #2', folder: '5.3.2 Engine 2', docs: [{ id: '5.3.2.1', name: 'Manufacture Plate' }] },
+      { id: '5.3.3', title: 'APU', folder: '5.3.3 APU', docs: [{ id: '5.3.3.1', name: 'Manufacture Plate' }] } ] },
     { id: '5.4', title: 'Exterior – Landing Gears Condition', folder: '5.4 Exterior - Landing Gears Condition', children: [
       { id: '5.4.1', title: 'NLG', folder: '5.4.1 NLG' },
       { id: '5.4.2', title: 'MLG LH', folder: '5.4.2 MLG LH' },
