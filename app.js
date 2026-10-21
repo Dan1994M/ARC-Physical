@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.7.1';
+const APP_VERSION = '0.7.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -116,6 +116,8 @@ function smFile(s, sm) {
 // Erlaubte Sample-Arten je Herkunft: Kat. 4 ohne D&B, Kat. 5 ohne LOPA
 const allowedKinds = id => Object.keys(SAMPLE_KINDS).filter(k => !(/^4\./.test(id || '') && k === 'db') && !(/^5\./.test(id || '') && k === 'lopa'));
 const defaultKind = id => /^4\.3/.test(id) ? 'lopa' : /^5\.[12]/.test(id) ? 'db' : 'comp';
+
+const AC_TYPES = ['A320-212', 'A320-214', 'A320-271N', 'A321-211', 'A321-271NX', 'A330-941'];
 
 const QUALITY = {
   original: { label: 'Original (full resolution, large) – default', max: 0 },
@@ -483,7 +485,7 @@ function viewItem(c, id) {
   h += `<div class="nav2">${prev ? `<a class="btn" href="${base}/i/${prev.id}">‹ ${esc(prev.id)}</a>` : '<span></span>'}
   ${next ? `<a class="btn" href="${base}/i/${next.id}">${esc(next.id)} ›</a>` : `<a class="btn" href="${base}/close">Abschluss ›</a>`}</div></main>`;
   h += `<div class="bbar"><button class="btn pri big grow" data-act="cam" data-item="${l.id}">📷 Photo</button>
-  ${l.samples ? '' : `<button class="btn big smbtn" data-act="smNew" data-origin="${l.id}">＋ Sample</button>`}
+  ${l.samples || !/^[45]\./.test(l.id) ? '' : `<button class="btn big smbtn" data-act="smNew" data-origin="${l.id}">＋ Sample</button>`}
   <button class="btn big fndbtn" data-act="camFinding" data-item="${l.id}">⚠ Finding</button></div>`;
   return h;
 }
@@ -606,7 +608,7 @@ function sessionSheet(s) {
   openSheet(`<h2>${s ? 'Edit Physical' : 'New Physical'}</h2>
   <label class="lbl">Registration *</label><input class="inp" id="fReg" value="${esc(v.reg)}" placeholder="D-ABCD" autocapitalize="characters" autocomplete="off" autocorrect="off">
   <label class="lbl">MSN</label><input class="inp" id="fMsn" value="${esc(v.msn)}" autocomplete="off">
-  <label class="lbl">Type</label><input class="inp" id="fType" value="${esc(v.type)}" placeholder="e.g. A320-214" autocomplete="off">
+  <label class="lbl">Type</label><select class="inp" id="fType"><option value="">– select –</option>${[...AC_TYPES, ...(v.type && !AC_TYPES.includes(v.type) ? [v.type] : [])].map(t => `<option ${v.type === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
   <label class="lbl">Location</label><input class="inp" id="fLoc" value="${esc(v.location)}" autocomplete="off">
   <label class="lbl">Date</label><input class="inp" id="fDate" type="date" value="${esc(v.date)}">
   <div class="row2"><button class="btn" data-act="sheetCancel">Cancel</button><button class="btn pri" data-act="saveSession" data-id="${s ? s.id : ''}">Save</button></div>`);
