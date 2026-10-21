@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.8.2';
+const APP_VERSION = '0.9.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -91,6 +91,19 @@ const HINTS = {
   '5.6': ['General condition', 'Cargo securing devices', 'Lights', 'ETOPS requirements (as applicable)'],
   '5.7': ['General condition (EWIS)', 'Lights'],
 };
+
+/* ---------------- Vorbereitung (vor dem Physical) ---------------- */
+const PREP = [
+  { id: 'p1', text: 'Download current LOPA' },
+  { id: 'p2', text: 'Download current EEL' },
+  { id: 'p3', text: 'Print A/C Instant Info at date of physical' },
+  { id: 'p4', text: 'Print D&B at date of physical' },
+  { id: 'p5', text: 'Print Configuration Control Report at date of physical' },
+  { id: 'p6', text: 'Pre-select samples on EEL', optional: true },
+  { id: 'p7', text: 'Pre-select samples on LOPA', optional: true },
+  { id: 'p8', text: 'Pre-select samples on D&B', optional: true },
+];
+const prepState = s => { const req = PREP.filter(x => !x.optional), d = s.prep || {}; return { done: req.filter(x => d[x.id]).length, total: req.length }; };
 
 /* ---------------- Samples (Prüfpunkt 6) ---------------- */
 const SAMPLE_KINDS = { comp: { item: '6.1', label: 'Component' }, lopa: { item: '6.2', label: 'LOPA' }, db: { item: '6.3', label: 'D&B' } };
@@ -372,7 +385,8 @@ function topbar(title, sub, back, right = '') {
 const sessSub = s => [s.msn && 'MSN ' + s.msn, s.type, fmtDay(s.date)].filter(Boolean).join(' · ');
 function tabs(c, active) {
   const b = `#/s/${c.s.id}`, iss = checkIssues(c);
-  return `<nav class="tabs"><a href="${b}" class="${active === 'list' ? 'on' : ''}">Checklist</a>
+  const ps = prepState(c.s);
+  return `<nav class="tabs"><a href="${b}/prep" class="${active === 'prep' ? 'on' : ''}">Prep${ps.done < ps.total ? ` <span class="dot"></span>` : ' ✓'}</a><a href="${b}" class="${active === 'list' ? 'on' : ''}">Checklist</a>
   <a href="${b}/findings" class="${active === 'findings' ? 'on' : ''}">Findings${c.findings.length ? ` (${c.findings.length})` : ''}</a>
   <a href="${b}/close" class="${active === 'close' ? 'on' : ''}">Close-out${iss.count ? ` <span class="dot"></span>` : ''}</a></nav>`;
 }
@@ -418,7 +432,7 @@ async function viewHome() {
     h += `<a class="card sess" href="#/s/${s.id}"><div class="sess-h"><b>${esc(s.reg)}</b><span class="mut">${esc(fmtDay(s.date))}</span></div>
     <div class="mut sm">${esc([s.msn && 'MSN ' + s.msn, s.type, s.location].filter(Boolean).join(' · '))}</div>
     <div class="pbar"><i style="width:${pct}%"></i></div>
-    <div class="chips"><span class="chip">${m.done}/${m.total}</span><span class="chip">📷 ${m.photos}</span>
+    <div class="chips">${(() => { const ps = prepState(s); return ps.done < ps.total ? `<span class="chip">Prep ${ps.done}/${ps.total}</span>` : ''; })()}<span class="chip">${m.done}/${m.total}</span><span class="chip">📷 ${m.photos}</span>
     <span class="chip ${m.findings ? 'fnd' : ''}">⚠ ${m.findings}${m.noWO ? ` · ${m.noWO} without WO` : ''}</span>
     ${s.closedAt ? '<span class="chip ok">closed</span>' : ''}${unexp ? '<span class="chip bad">not exported</span>' : ''}</div></a>`;
   }
@@ -511,6 +525,14 @@ function viewFinding(c, fid) {
   h += `<div class="bbar"><button class="btn pri big grow" data-act="cam" data-item="${f.itemId}" data-fid="${f.id}">📷 Photo for finding</button></div>`;
   return h;
 }
+function viewPrep(c) {
+  const s = c.s, d = s.prep || {}, ps = prepState(s);
+  let h = topbar(s.reg, sessSub(s), '#/') + tabs(c, 'prep') + '<main class="wrap">';
+  h += `<div class="card pad"><div class="pb-h"><b>Preparation ${ps.done} / ${ps.total}</b><span class="mut sm">physical date ${esc(fmtDay(s.date))}</span></div>`;
+  for (const x of PREP) h += `<label class="chk prep"><input type="checkbox" data-field="prep" data-id="${x.id}" ${d[x.id] ? 'checked' : ''}> <span>${esc(x.text)}${x.optional ? ' <span class="mut">(optional)</span>' : ''}</span></label>`;
+  h += `<label class="lbl" style="margin-top:14px;display:block">Notes</label><textarea class="inp" rows="3" data-field="prepNote" placeholder="e.g. pre-selected samples, open questions">${esc(s.prepNote || '')}</textarea></div>`;
+  return h + '</main>';
+}
 function viewFindings(c) {
   let h = topbar(c.s.reg, sessSub(c.s), '#/') + tabs(c, 'findings') + '<main class="wrap">';
   const all = [...c.findings].sort((a, b) => a.num - b.num);
@@ -586,7 +608,8 @@ function parseRoute() {
   const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
   if (p[0] !== 's' || !p[1]) return { view: 'home' };
   const r = { sid: p[1], view: 'list' };
-  if (p[2] === 'findings') r.view = 'findings';
+  if (p[2] === 'prep') r.view = 'prep';
+  else if (p[2] === 'findings') r.view = 'findings';
   else if (p[2] === 'close') r.view = 'close';
   else if (p[2] === 'i') { r.view = 'item'; r.id = p[3]; }
   else if (p[2] === 'f') { r.view = 'finding'; r.id = p[3]; }
@@ -601,9 +624,9 @@ async function render() {
     else {
       const c = await loadSession(r.sid);
       if (!c) { location.hash = '#/'; return; }
-      html = { list: viewSession, findings: viewFindings, close: viewClose, item: viewItem, finding: viewFinding }[r.view](c, r.id);
+      html = { list: viewSession, prep: viewPrep, findings: viewFindings, close: viewClose, item: viewItem, finding: viewFinding }[r.view](c, r.id);
     }
-  } catch (err) { console.error(err); html = `<main class="wrap"><p class="bad">Fehler: ${esc(err.message)}</p></main>`; }
+  } catch (err) { console.error(err); html = `<main class="wrap"><p class="bad">Error: ${esc(err.message)}</p></main>`; }
   app.innerHTML = html;
   window.scrollTo(0, key === lastKey ? y : 0);
   lastKey = key;
@@ -1172,6 +1195,8 @@ async function onField(el, commit) {
   switch (f) {
     case 'naReason': itemState(c.s, el.dataset.id).reason = v; sessDirty = true; schedule(); if (commit) { await flush(); render(); } break;
     case 'itemNote': itemState(c.s, el.dataset.id).note = v; sessDirty = true; schedule(); break;
+    case 'prep': if (commit) { (c.s.prep ||= {})[el.dataset.id] = v; await touch(); render(); } break;
+    case 'prepNote': c.s.prepNote = v; sessDirty = true; schedule(); break;
     case 'closeReason': c.s.closeReason = v; sessDirty = true; schedule(); break;
     case 'fText': fi.text = v; dirtyF.add(fi); schedule(); break;
     case 'fWO': fi.wo = v.trim(); dirtyF.add(fi); schedule(); break;

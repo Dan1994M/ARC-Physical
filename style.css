@@ -133,3 +133,5 @@ textarea.inp{resize:vertical}
 .bbar .btn{white-space:nowrap}.bbar .btn.big:not(.grow){flex:0 0 auto;padding-left:14px;padding-right:14px}
 .ph-r{position:absolute;right:4px;bottom:4px;font-size:10px;font-weight:800;padding:1px 5px;border-radius:6px;background:var(--ok);color:#fff}
 .part{padding:10px 0;border-top:1px solid var(--line)}.part:first-of-type{border-top:0}
+.chk.prep{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);margin:0}.chk.prep input{margin-top:3px;flex:0 0 auto;width:20px;height:20px}
+.tabs a{white-space:nowrap}
