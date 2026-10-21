@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.6.1';
+const APP_VERSION = '0.6.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -78,6 +78,14 @@ const HINTS = {
     'Placards & Markings – no smoking/fasten seatbelt, row/bin/exit placards',
     'Additionally: PSU/oxygen box doors, doors/slide armed indication, assist handles',
   ],
+  '5.1': ['Paint condition', 'Exterior lights', 'Fluid leakages', 'Missing parts (e.g. fasteners, static dischargers)'],
+  '5.2': ['Airframe condition', 'Radome condition', 'LH wing condition (flaps extended)', 'RH wing condition (flaps extended)',
+    'Horizontal stabilizer condition', 'Vertical stabilizer condition', 'Pitot tubes condition', 'Static ports & area condition'],
+  '5.3': ['Engine cowling condition (fan cowls opened)', 'Engine air inlet condition', 'Fan condition (incl. lining)', 'Fluid levels / leakages', 'Access panel condition'],
+  '5.4': ['Tire condition', 'Brake condition', 'Shock strut condition', 'Fluid leakages', 'Gear door condition'],
+  '5.5': ['Passenger / service door function / condition', 'Cargo door function / condition', 'Access door / panel condition', 'Proper bonding (EWIS)'],
+  '5.6': ['General condition', 'Cargo securing devices', 'Lights', 'ETOPS requirements (as applicable)'],
+  '5.7': ['General condition (EWIS)', 'Lights'],
 };
 
 const QUALITY = {
@@ -408,7 +416,8 @@ function viewItem(c, id) {
   ${[['open', 'Open'], ['ok', 'Checked'], ['na', 'N/A']].map(([v, t]) => `<button data-act="setStatus" data-item="${l.id}" data-v="${v}" class="${st.status === v ? 'on ' + v : ''}">${t}</button>`).join('')}</div>
   ${st.status === 'na' ? `<div class="lbl">N/A reason</div><input class="inp" data-field="naReason" data-id="${l.id}" value="${esc(st.reason)}" placeholder="Required">` : ''}
   ${e.state === 'warn' ? `<div class="hint">${st.status === 'ok' ? (l.docs ? `Missing documents: ${e.miss.map(d => d.name).join(', ')}` : `Required photo missing (${e.n} / ${e.min})`) : 'N/A reason missing'}</div>` : ''}</div>`;
-  const hi = HINTS[l.id];
+  // Hinweise des Prüfpunkts, sonst vom nächsten Elternknoten (z. B. 5.3 -> 5.3.1/5.3.2/5.3.3)
+  const hi = [l, ...[...(l.parents || [])].reverse()].map(n => HINTS[n.id]).find(Boolean);
   if (hi?.length) h += `<details class="card pad hints"><summary class="lbl">What to look for</summary><ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
   const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated);
   if (l.docs) {
