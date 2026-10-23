@@ -38,6 +38,10 @@ try {
   await go('i/5.3.1'); await pg.click('[data-act=smNew]'); await pg.click('.sheet button.pri[data-act=smCreate]'); await shot();
   await pg.fill('#sheet [data-field=sm_pn]', 'PN1'); await pg.click('[data-act=smDone]'); await pg.waitForTimeout(300);
   ok(await pg.evaluate(() => cur.s.samples?.[0]?.pn === 'PN1'), 'component sample with P/N');
+  await go('prep'); await pg.click('[data-field=prep][data-id=p9]'); await pg.waitForTimeout(300); await pg.click('[data-act=smPre][data-kind=mod]'); await pg.waitForTimeout(300);
+  await pg.fill('.pre-sm [data-field=sm_name]', 'STC-TEST'); await pg.waitForTimeout(600);
+  ok(await pg.evaluate(() => cur.s.samples.some(x => x.kind === 'mod' && x.pre && x.name === 'STC-TEST')), 'pre-selected MOD/STC sample');
+  await go('i/6.5'); ok(await pg.locator('main').innerText().then(t => t.includes('Pre-selected')), 'pre-selected sample shown in 6.5');
   const pdf = await pg.evaluate(async () => { const bl = await buildReportPDF(cur); const a = new Uint8Array(await bl.arrayBuffer()); return String.fromCharCode(...a.slice(0, 5)) + '|' + a.length; });
   ok(pdf.startsWith('%PDF-'), `finding report PDF (${pdf.split('|')[1]} bytes)`);
   const z1 = await pg.evaluate(async () => { await buildZip(0); const z = await JSZip.loadAsync(exportReady.ready.blob); return { parts: exportReady.parts.length, files: Object.keys(z.files).filter(n => !n.endsWith('/')) }; });
