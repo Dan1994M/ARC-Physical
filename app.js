@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.10.1';
+const APP_VERSION = '0.10.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -213,13 +213,15 @@ const leafById = (s, id) => leaves(s).find(l => l.id === id);
 const leafPath = l => [...(l.parents || []).map(p => p.folder), l.folder].join('/');
 const itemState = (s, id) => (s.items[id] ||= { status: 'open', reason: '', note: '' });
 
+// EEL-Sample (vor Ort oder pre-selected) mit Foto gilt als Nachweis für 4.1.1 / 4.1.2
+const eelOk = (c, area) => EEL_AREAS.some(([v]) => v === area) && samplesOf(c.s, 'eel').some(x => (x.area || '4.1.1') === area && c.photos.some(p => p.sampleId === x.id));
 function evalItem(c, l) {
   const st = c.s.items[l.id] || { status: 'open', reason: '', note: '' };
   const n = c.photos.filter(p => p.itemId === l.id).length;
   let min = l.minPhotos ?? DEFAULT_MIN_PHOTOS, ok = n >= min, miss = [];
   if (l.docs) {
     const req = l.docs.filter(d => !d.optional);
-    miss = req.filter(d => !c.photos.some(p => p.itemId === l.id && p.docId === d.id));
+    miss = req.filter(d => !c.photos.some(p => p.itemId === l.id && p.docId === d.id) && !eelOk(c, d.id));
     min = req.length; ok = !miss.length;
   }
   if (l.samples) { min = 1; ok = samplesOf(c.s, l.samples).some(x => c.photos.some(p => p.sampleId === x.id)); }
