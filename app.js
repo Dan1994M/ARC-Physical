@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.10.0';
+const APP_VERSION = '0.10.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -57,8 +57,7 @@ const CHECKLIST = [
     { id: '6.1', title: 'Component Samples', folder: '6.1 Component Samples', samples: 'comp' },
     { id: '6.2', title: 'LOPA Samples', folder: '6.2 LOPA Samples', samples: 'lopa' },
     { id: '6.3', title: 'D&B Samples', folder: '6.3 D&B Samples', samples: 'db' },
-    { id: '6.4', title: 'EEL Samples', folder: '6.4 EEL Samples', samples: 'eel' },
-    { id: '6.5', title: 'MOD / STC Samples', folder: '6.5 MOD STC Samples', samples: 'mod' } ] },
+    { id: '6.4', title: 'MOD / STC Samples', folder: '6.4 MOD STC Samples', samples: 'mod' } ] },
 ];
 
 /* ---------------- Gedankenstützen je Prüfpunkt ----------------
@@ -110,8 +109,9 @@ const prepState = s => { const req = PREP.filter(x => !x.optional), d = s.prep |
 
 /* ---------------- Samples (Prüfpunkt 6) ---------------- */
 const SAMPLE_KINDS = { comp: { item: '6.1', label: 'Component' }, lopa: { item: '6.2', label: 'LOPA' }, db: { item: '6.3', label: 'D&B' },
-  eel: { item: '6.4', label: 'EEL' }, mod: { item: '6.5', label: 'MOD/STC' } };
-const PRE_ONLY = ['eel', 'mod']; // nur über Preparation bzw. direkt in 6.4/6.5 anlegbar
+  eel: { item: '4.1', label: 'EEL' }, mod: { item: '6.4', label: 'MOD/STC' } };
+const EEL_AREAS = [['4.1.1', 'Cockpit'], ['4.1.2', 'Cabin']]; // EEL-Samples hängen unter 4.1.1 / 4.1.2
+const PRE_ONLY = ['eel', 'mod']; // nur über Preparation bzw. 4.1 / 6.4 anlegbar
 // Sitzgruppen je Typ (aus Feld „Type“ des Physicals); Fallback Narrowbody
 const lopaSides = type => /A?33\d/i.test(type || '') ? ['AC', 'DEFG', 'HK'] : ['ABC', 'DEF'];
 const smNo = sm => 'S' + pad(sm.num);
@@ -123,7 +123,7 @@ function smLabel(s, sm) {
 }
 function smFile(s, sm) {
   const k = SAMPLE_KINDS[sm.kind], o = sm.origin && leafById(s, sm.origin);
-  const parts = [`${k.item} ${smNo(sm)}`];
+  const parts = [`${sm.kind === 'eel' ? sm.area || k.item : k.item} ${smNo(sm)}`];
   if (sm.name) parts.push(sm.name.slice(0, 40));
   if (sm.kind === 'lopa') parts.push(`Row ${sm.row || 'X'} ${sm.side || ''}`.trim());
   else if (o && !o.samples) parts.push(o.folder);
@@ -481,8 +481,18 @@ function viewItem(c, id) {
       h += `<div class="card pad"><div class="lbl">${esc(d.id)} ${esc(d.name)}${d.optional ? ` <span class="mut">(${d.optional === true ? 'optional' : esc(d.optional)})</span>` : ''} <span class="mut">${dp.length ? dp.length + ' photo(s)' : ''}</span></div>${photoGrid(dp, 'd:' + d.id)}
       <button class="btn" data-act="cam" data-item="${l.id}" data-doc="${d.id}">📷 Photo</button>
       <button class="link" data-act="library" data-item="${l.id}" data-doc="${d.id}">From library</button></div>`;
+      if (l.id === SAMPLE_KINDS.eel.item && EEL_AREAS.some(([v]) => v === d.id)) {
+        for (const sm of samplesOf(c.s, 'eel').filter(x => (x.area || '4.1.1') === d.id)) {
+          const sp = c.photos.filter(p => p.sampleId === sm.id);
+          h += `<div class="card pad pre-sm"><div class="sm-h"><b>${d.id} ${smNo(sm)}</b>${sm.pre ? '<span class="pre-b">PRE</span>' : ''}<span class="mut grow">EEL sample</span><button class="link bad" data-act="smDel" data-sid="${sm.id}">Delete</button></div>
+          ${smFields(sm, [])}${photoGrid(sp, 'sm:' + sm.id)}
+          <button class="btn" data-act="cam" data-item="${l.id}" data-sample="${sm.id}">📷 Photo</button>
+          <button class="link" data-act="library" data-item="${l.id}" data-sample="${sm.id}">From library</button></div>`;
+        }
+        h += `<button class="btn block pre-add" data-act="smPre" data-kind="eel" data-area="${d.id}">＋ EEL sample (${d.id})</button>`;
+      }
     }
-    const rest = ph.filter(p => !p.docId && !p.findingId);
+    const rest = ph.filter(p => !p.docId && !p.findingId && !p.sampleId);
     if (rest.length) h += `<div class="card pad"><div class="lbl">Other photos</div>${photoGrid(rest, 'item:' + l.id)}</div>`;
   } else if (l.samples) {
     const list = samplesOf(c.s, l.samples), sides = lopaSides(c.s.type);
@@ -671,7 +681,7 @@ function smFields(sm, sides, inSheet) {
   const a = k => inSheet ? `id="sm_${k}"` : `data-field="sm_${k}" data-sid="${sm.id}"`;
   const inp = (k, lbl, ph = '', extra = '') => `<label class="lbl">${lbl}</label><input class="inp" ${a(k)} value="${esc(sm[k] || '')}" placeholder="${ph}" autocomplete="off" autocorrect="off" ${extra}>`;
   const cap = 'autocapitalize="characters" spellcheck="false"';
-  if (sm.kind === 'eel') return inp('name', 'Name / EEL position *', 'e.g. FCU, ATA 22') + inp('pn', 'P/N', 'optional', cap) + inp('sn', 'S/N', 'optional', cap) + inp('desc', 'Remarks', 'optional');
+  if (sm.kind === 'eel') return `<label class="lbl">Area *</label><select class="inp" ${a('area')}>${EEL_AREAS.map(([v, t]) => `<option value="${v}" ${sm.area === v ? 'selected' : ''}>${v} ${t}</option>`).join('')}</select>` + inp('name', 'Name / EEL position *', 'e.g. FCU, ATA 22') + inp('pn', 'P/N', 'optional', cap) + inp('sn', 'S/N', 'optional', cap) + inp('desc', 'Remarks', 'optional');
   if (sm.kind === 'mod') return inp('name', 'MOD / STC No. *', 'e.g. STC EASA.10012345', cap) + inp('desc', 'Remarks', 'optional, e.g. title, location, placards to check');
   const nm = sm.pre || sm.name ? inp('name', 'Name', 'optional') : '';
   if (sm.kind === 'comp') return nm + inp('pn', 'P/N', 'optional', 'autocapitalize="characters" spellcheck="false"') + inp('sn', 'S/N', 'optional', 'autocapitalize="characters" spellcheck="false"') + inp('desc', 'Description', 'optional');
@@ -695,7 +705,7 @@ function smDetailSheet(sm) {
   <div class="row2"><button class="btn pri" data-act="smDone">Done</button></div>`);
   setTimeout(() => $('#sheet [data-field="sm_pn"]')?.focus(), 50);
 }
-function smReadSheet() { for (const k of ['name', 'pn', 'sn', 'desc', 'row', 'side']) { const el = $('#sm_' + k); if (el) smDraft[k] = el.value.trim(); } }
+function smReadSheet() { for (const k of ['area', 'name', 'pn', 'sn', 'desc', 'row', 'side']) { const el = $('#sm_' + k); if (el) smDraft[k] = el.value.trim(); } }
 
 async function saveSession(id) {
   const reg = $('#fReg').value.trim().toUpperCase();
@@ -1119,7 +1129,7 @@ document.addEventListener('click', async e => {
       case 'smNew': smDraft = { kind: d.kind || defaultKind(d.origin), origin: d.kind ? null : d.origin, fixed: !!d.kind }; sampleSheet(); break;
       case 'smPre': { // Vorausgewähltes Sample ohne Foto anlegen (Preparation)
         const sq = c.s.sampleSeq ||= {}; sq[d.kind] = (sq[d.kind] || 0) + 1;
-        (c.s.samples ||= []).push({ id: uid(), kind: d.kind, origin: null, pre: true, name: '', pn: '', sn: '', row: '', side: d.kind === 'lopa' ? lopaSides(c.s.type)[0] : '', desc: '', num: sq[d.kind], createdAt: nowISO() });
+        (c.s.samples ||= []).push({ id: uid(), kind: d.kind, origin: null, name: '', pn: '', sn: '', row: '', side: d.kind === 'lopa' ? lopaSides(c.s.type)[0] : '', area: d.kind === 'eel' ? d.area || '4.1.1' : '', pre: !d.area, desc: '', num: sq[d.kind], createdAt: nowISO() });
         await touch(); render(); setTimeout(() => [...document.querySelectorAll('.pre-sm input')].filter(e => !e.value).pop()?.focus(), 50); break;
       }
       case 'smDone': closeSheet(); await flush(); render(); break;
@@ -1228,7 +1238,7 @@ async function onField(el, commit) {
       fi.itemId = v; const ph = c.photos.filter(p => p.findingId === fi.id); ph.forEach(p => { p.itemId = v; });
       await savePhotoMetas(ph); await put('findings', fi); await touch(); render(); toast(`${fNo(fi)} moved to ${v}`);
     } break;
-    case 'sm_name': case 'sm_pn': case 'sm_sn': case 'sm_desc': case 'sm_row': case 'sm_side': {
+    case 'sm_area': case 'sm_name': case 'sm_pn': case 'sm_sn': case 'sm_desc': case 'sm_row': case 'sm_side': {
       const sm = c.s.samples.find(x => x.id === el.dataset.sid); sm[f.slice(3)] = typeof v === 'string' ? v.trim() : v; sessDirty = true; schedule(); break;
     }
     case 'vReport': if (commit) {
