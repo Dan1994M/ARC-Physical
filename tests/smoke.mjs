@@ -48,7 +48,7 @@ try {
   ok(await pg.evaluate(() => cur.s.samples.some(x => x.kind === 'mod' && x.pre && x.name === 'STC-TEST')), 'pre-selected MOD/STC sample');
   await go('prep'); await pg.click('[data-field=prep][data-id=p6]'); await pg.waitForTimeout(300); await pg.click('[data-act=smPre][data-kind=eel]'); await pg.waitForTimeout(300);
   await pg.selectOption('.pre-sm [data-field=sm_area]', '4.1.2'); await pg.fill('.pre-sm [data-field=sm_name]', 'EEL-X'); await pg.waitForTimeout(600);
-  await go('i/4.1'); ok(await pg.evaluate(() => { const x = cur.s.samples.find(y => y.kind === 'eel'); return x?.pre && x.area === '4.1.2' && x.name === 'EEL-X'; }) && await pg.locator('main').innerText().then(t => t.includes('4.1.2.1')), 'pre-selected EEL sample under 4.1.2');
+  await go('i/4.1'); ok(await pg.evaluate(() => { const x = cur.s.samples.find(y => y.kind === 'eel'); return x?.pre && x.area === '4.1.2' && x.name === 'EEL-X'; }) && await pg.locator('main').innerText().then(t => t.includes('4.1.2.01')), 'pre-selected EEL sample under 4.1.2');
   await go('i/6.4'); ok(await pg.locator('main').innerText().then(t => t.includes('Pre-selected')), 'pre-selected sample shown in 6.4');
   const pdf = await pg.evaluate(async () => { const bl = await buildReportPDF(cur); const a = new Uint8Array(await bl.arrayBuffer()); return String.fromCharCode(...a.slice(0, 5)) + '|' + a.length; });
   ok(pdf.startsWith('%PDF-'), `finding report PDF (${pdf.split('|')[1]} bytes)`);

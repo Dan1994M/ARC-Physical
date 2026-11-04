@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.13.0';
+const APP_VERSION = '0.13.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -114,8 +114,8 @@ const EEL_AREAS = [['4.1.1', 'Cockpit'], ['4.1.2', 'Cabin']]; // EEL-Samples hä
 const PRE_ONLY = ['eel', 'mod']; // nur über Preparation bzw. 4.1 / 6.4 anlegbar
 // Sitzgruppen je Typ (aus Feld „Type“ des Physicals); Fallback Narrowbody
 const lopaSides = type => /A?33\d/i.test(type || '') ? ['AC', 'DEFG', 'HK'] : ['ABC', 'DEF'];
-// Sample-Nr. mit Prüflisten-Bezug, z. B. 6.1.3 (EEL: 4.1.1.x / 4.1.2.x)
-const smNo = sm => `${sm.kind === 'eel' ? sm.area || SAMPLE_KINDS.eel.item : SAMPLE_KINDS[sm.kind]?.item || ''}.${sm.num}`;
+// Sample-Nr. mit Prüflisten-Bezug, z. B. 6.1.03 (EEL: 4.1.1.xx / 4.1.2.x)
+const smNo = sm => `${sm.kind === 'eel' ? sm.area || SAMPLE_KINDS.eel.item : SAMPLE_KINDS[sm.kind]?.item || ''}.${pad(sm.num)}`;
 const samplesOf = (s, kind) => (s.samples || []).filter(x => x.kind === kind).sort((a, b) => a.num - b.num);
 function smOrigin(s, sm) { const l = sm.origin && leafById(s, sm.origin); return l ? `${l.id} ${l.title}` : sm.pre ? 'Pre-selected' : ''; }
 function smLabel(s, sm) {
