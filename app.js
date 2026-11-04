@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.18.1';
+const APP_VERSION = '0.18.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -1028,33 +1028,36 @@ function addXlTable(z, name, ref, head) {
   z.file('xl/tables/table1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="${name}" displayName="${name}" ref="${ref}" totalsRowShown="0"><autoFilter ref="${ref}"/>
 <tableColumns count="${head.length}">${head.map((h, i) => `<tableColumn id="${i + 1}" name="${esc2(h)}"/>`).join('')}</tableColumns>
-<tableStyleInfo name="TableStyleLight1" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>`);
+<tableStyleInfo name="ARC Grid" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>`);
   z.file('xl/worksheets/_rels/sheet1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/></Relationships>`);
 }
 /* Einfache Tabellen-XLSX (Findings / Samples): Kopfzeile fett, Filter, fixiert; Text als Textformat (@), damit Excel 5.3 nicht als Datum liest. */
 const xlCol = i => { let r = ''; for (i++; i; i = (i - 1) / 26 | 0) r = String.fromCharCode(65 + (i - 1) % 26) + r; return r; };
-async function buildTableXLSX(sheetName, head, rows, widths = []) {
-  rows = [...rows];
+async function buildTableXLSX(c, title, head, rows, widths = []) {
+  const s = c.s;
+  rows = rows.length ? [...rows] : [head.map(() => '')];
   const x = v => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-  const cell = (ref, v, st) => typeof v === 'number' ? `<c r="${ref}" s="${st === 1 ? 1 : 3}"><v>${v}</v></c>` : `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
-  if (!rows.length) rows = [head.map(() => '')];
-  const all = [head, ...rows], last = xlCol(head.length - 1) + all.length;
-  const sd = all.map((r, i) => `<row r="${i + 1}">${r.map((v, j) => cell(xlCol(j) + (i + 1), v, i ? 2 : 1)).join('')}</row>`).join('');
+  const str = (ref, v, st) => `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  const cell = (ref, v) => typeof v === 'number' ? `<c r="${ref}" s="9"><v>${v}</v></c>` : str(ref, v, 8);
+  const run = (t, sz) => `<r><rPr><b/><sz val="${sz}"/><rFont val="Arial"/><family val="2"/></rPr><t xml:space="preserve">${x(t)}</t></r>`;
+  const n = head.length, lc = xlCol(n - 1), last = rows.length + 4;
+  const out = [`<row r="1" ht="24" customHeight="1"><c r="A1" s="1" t="inlineStr"><is>${run(s.reg + '   ', 15)}${run(title, 12)}</is></c></row>`,
+    `<row r="2" ht="15" customHeight="1">${str('A2', [s.msn && 'MSN ' + s.msn, s.type].filter(Boolean).join(' · '), 3)}${str(lc + '2', 'Date ' + fmtDay(s.date), 4)}</row>`,
+    `<row r="4" ht="20" customHeight="1">${head.map((h, j) => str(xlCol(j) + 4, h, 5)).join('')}</row>`,
+    ...rows.map((r, i) => `<row r="${i + 5}">${r.map((v, j) => cell(xlCol(j) + (i + 5), v)).join('')}</row>`)];
   const cols = head.map((h, j) => `<col min="${j + 1}" max="${j + 1}" width="${widths[j] || Math.min(50, Math.max(10, h.length + 2, ...rows.map(r => String(r[j] ?? '').length + 2)))}" customWidth="1"/>`).join('');
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
-<cols>${cols}</cols><sheetData>${sd}</sheetData><pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/><tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`;
-  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>
-<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/></patternFill></fill></fills>
-<borders count="2"><border/><border><left style="thin"><color rgb="FF595959"/></left><right style="thin"><color rgb="FF595959"/></right><top style="thin"><color rgb="FF595959"/></top><bottom style="thin"><color rgb="FF595959"/></bottom><diagonal/></border></borders>
-<cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="4"><xf/>
-<xf numFmtId="49" fontId="1" borderId="1" applyNumberFormat="1" applyFont="1" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>
-<xf numFmtId="49" borderId="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
-<xf numFmtId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf></cellXfs>
-<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
-  const z = new JSZip(), nm = x(sheetName).replace(/'/g, "''");
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${lc}${last}"/>
+<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="15"/><cols>${cols}</cols><sheetData>${out.join('')}</sheetData>
+${n > 2 ? `<mergeCells count="2"><mergeCell ref="A1:${xlCol(n - 2)}1"/><mergeCell ref="A2:${xlCol(n - 2)}2"/></mergeCells>` : ''}
+<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/>
+<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>
+<headerFooter><oddFooter>&amp;L${x(s.reg)} · ${x(title)}&amp;RPage &amp;P / &amp;N</oddFooter></headerFooter>
+<tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`;
+  const z = new JSZip(), nm = x(title).replace(/'/g, "''");
   z.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
@@ -1064,12 +1067,12 @@ async function buildTableXLSX(sheetName, head, rows, widths = []) {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
   z.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${nm}" sheetId="1" r:id="rId1"/></sheets>
-<definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">'${nm}'!$1:$1</definedName></definedNames></workbook>`);
+<definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">'${nm}'!$4:$4</definedName></definedNames></workbook>`);
   z.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
   z.file('xl/worksheets/sheet1.xml', sheet);
-  z.file('xl/styles.xml', styles);
-  addXlTable(z, sheetName.replace(/\W/g, ''), 'A1:' + last, head);
+  z.file('xl/styles.xml', xlStyles());
+  addXlTable(z, title.replace(/\W/g, ''), `A4:${lc}${last}`, head);
   return z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 function findingsTable(c) {
@@ -1085,9 +1088,37 @@ function samplesTable(c) {
       x.pn, x.sn, x.row, x.side, x.desc, fmtDT(x.createdAt)])];
 }
 const tableFiles = async (R, c) => {
-  R.file('Samples.xlsx', await buildTableXLSX('Samples', ...samplesTable(c)));
-  R.file('Findings.xlsx', await buildTableXLSX('Findings', ...findingsTable(c), [8, 9, 28, 45, 12, 32, 16, 45]));
+  R.file('Samples.xlsx', await buildTableXLSX(c, 'Samples', ...samplesTable(c)));
+  R.file('Findings.xlsx', await buildTableXLSX(c, 'Findings', ...findingsTable(c), [8, 9, 28, 45, 12, 32, 16, 45]));
 };
+/* Gemeinsame Styles aller Excel-Listen (Design der Component-Samples-Liste).
+   0 normal · 1 Titel 15 · 2 Titel 12 · 3 Info · 4 Info rechts · 5 Kopf · 6 Text-Zelle · 7 Checkbox · 8 Text · 9 Zahl */
+function xlStyles() {
+  const font = (sz, b) => `<font>${b ? '<b/>' : ''}<sz val="${sz}"/><name val="Arial"/><family val="2"/></font>`;
+  const bd = '<border><left style="thin"><color rgb="FF595959"/></left><right style="thin"><color rgb="FF595959"/></right><top style="thin"><color rgb="FF595959"/></top><bottom style="thin"><color rgb="FF595959"/></bottom><diagonal/></border>';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:xfpb="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag" mc:Ignorable="xfpb">
+<fonts count="5">${font(10)}${font(15, 1)}${font(12, 1)}${font(9)}${font(9, 1)}</fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEBEEF2"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${bd}</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="10">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+<xf numFmtId="0" fontId="4" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="49" fontId="3" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/><extLst><ext uri="{C7286773-470A-42A8-94C5-96B5CB345126}" xmlns:xfpb="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag"><xfpb:xfComplement i="0"/></ext></extLst></xf>
+<xf numFmtId="49" fontId="3" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+<dxfs count="2"><dxf><border><left style="thin"><color rgb="FF595959"/></left><right style="thin"><color rgb="FF595959"/></right><top style="thin"><color rgb="FF595959"/></top><bottom style="thin"><color rgb="FF595959"/></bottom><vertical style="thin"><color rgb="FF595959"/></vertical><horizontal style="thin"><color rgb="FF595959"/></horizontal></border></dxf><dxf><font><b/></font><fill><patternFill patternType="solid"><bgColor rgb="FFEBEEF2"/></patternFill></fill></dxf></dxfs>
+<tableStyles count="1" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"><tableStyle name="ARC Grid" pivot="0" count="2"><tableStyleElement type="wholeTable" dxfId="0"/><tableStyleElement type="headerRow" dxfId="1"/></tableStyle></tableStyles>
+</styleSheet>`;
+}
 async function buildCompXLSX(c) {
   const s = c.s, list = samplesOf(s, 'comp');
   const x = v => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -1118,26 +1149,7 @@ async function buildCompXLSX(c) {
 <headerFooter><oddFooter>&amp;L${x(s.reg)} · Component Samples&amp;RPage &amp;P / &amp;N</oddFooter></headerFooter>
 <tableParts count="1"><tablePart r:id="rId1"/></tableParts>
 </worksheet>`;
-  const font = (sz, b) => `<font>${b ? '<b/>' : ''}<sz val="${sz}"/><name val="Arial"/><family val="2"/></font>`;
-  const bd = '<border><left style="thin"><color rgb="FF595959"/></left><right style="thin"><color rgb="FF595959"/></right><top style="thin"><color rgb="FF595959"/></top><bottom style="thin"><color rgb="FF595959"/></bottom><diagonal/></border>';
-  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:xfpb="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag" mc:Ignorable="xfpb">
-<fonts count="5">${font(10)}${font(15, 1)}${font(12, 1)}${font(9)}${font(9, 1)}</fonts>
-<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEBEEF2"/><bgColor indexed="64"/></patternFill></fill></fills>
-<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${bd}</borders>
-<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="8">
-<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
-<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
-<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
-<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right"/></xf>
-<xf numFmtId="0" fontId="4" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
-<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/><extLst><ext uri="{C7286773-470A-42A8-94C5-96B5CB345126}" xmlns:xfpb="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag"><xfpb:xfComplement i="0"/></ext></extLst></xf>
-</cellXfs>
-<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
-</styleSheet>`;
+  const styles = xlStyles();
   const fpb = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <FeaturePropertyBags xmlns="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag"><bag type="Checkbox"/><bag type="XFControls"><bagId k="CellControl">0</bagId></bag><bag type="XFComplement"><bagId k="XFControls">1</bagId></bag><bag type="XFComplements" extRef="XFComplementsMapperExtRef"><a k="MappedFeaturePropertyBags"><bagId>2</bagId></a></bag></FeaturePropertyBags>`;
   const z = new JSZip();
