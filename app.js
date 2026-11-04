@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.17.0';
+const APP_VERSION = '0.17.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -539,7 +539,7 @@ function viewItem(c, id) {
   const hi = [l, ...[...(l.parents || [])].reverse()].map(n => HINTS[n.id]).find(Boolean) || [];
   const g = GEAR_ITEMS[l.id], fam = gearFam(c.s.type), fams = g ? (fam ? [fam] : Object.keys(WHEELS)) : [];
   const wh = fams.map(f => `<div class="wh">${wheelSVG(f, g)}<div class="sm">${esc(wheelText(f, g))}</div></div>`).join('');
-  if (hi.length || wh) h += `<details class="card pad hints" ${wh ? 'open' : ''}><summary class="lbl">What to look for</summary>${wh}${hi.length ? `<ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</details>`;
+  if (hi.length || wh) h += `<details class="card pad hints"><summary class="lbl">What to look for</summary>${wh}${hi.length ? `<ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</details>`;
   const supK = l.samples || (l.id === SAMPLE_KINDS.eel.item ? 'eel' : null);
   if (supK) h += `<div class="card pad">${supportBox(c, supK)}</div>`;
   const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated);
