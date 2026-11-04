@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.13.2';
+const APP_VERSION = '0.14.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -765,6 +765,9 @@ async function settingsSheet() {
   <select class="inp" id="setQ">${Object.entries(QUALITY).map(([k, q]) => `<option value="${k}" ${settings.quality === k ? 'selected' : ''}>${q.label}</option>`).join('')}</select>
   <div class="mut sm">“Original” keeps full resolution and EXIF data but creates very large exports. “High” keeps placards legible and the ZIP export on the iPhone more stable.</div>
   <div class="lbl">Storage</div><div class="sm" id="storInfo">…</div>
+  <div class="lbl">Export template</div>
+  <button class="btn" data-act="exportTemplate">📁 Export template folder (ZIP)</button>
+  <div class="mut sm">Shows the folder structure and all reports/tables of a finished physical, filled with placeholder data (no photos). Always reflects the current app version.</div>
   <div class="mut sm">Version ${APP_VERSION}. Data stays on this device only.</div>
   <div class="row2"><button class="btn pri" data-act="sheetCancel">Done</button></div>`);
   $('#setQ').onchange = e => { settings.quality = e.target.value; saveSettings(); };
@@ -1215,6 +1218,32 @@ function downloadZip() {
   const x = exportReady.ready, a = document.createElement('a'); a.href = x.url; a.download = x.name;
   document.body.appendChild(a); a.click(); a.remove(); markPartDone();
 }
+// Template-Export: gleicher Aufbau wie buildZip, aber mit Platzhalterdaten und ohne Fotos.
+async function exportTemplate() {
+  if (typeof JSZip === 'undefined') { toast('ZIP library not loaded'); return; }
+  busy('Creating template …');
+  try {
+    const t = nowISO(), s = { id: 'template', reg: 'D-XXXX', msn: '0000', type: 'A/C Type', location: 'Location', date: todayYMD(), createdAt: t, modifiedAt: t,
+      checklist: JSON.parse(JSON.stringify(CHECKLIST)), items: {}, findingSeq: 1, closedAt: t, closeReason: '', exportedAt: null, appVersion: APP_VERSION,
+      samples: [{ id: 'tsm1', kind: 'comp', num: 1, name: 'Example component', pn: 'P/N', sn: 'S/N', desc: 'Example sample (placeholder)', pre: true, createdAt: t }] };
+    const L = leaves(s), fi = L.find(l => l.id === '5.3') || L[0];
+    const f = { id: 'tf1', num: 1, itemId: fi.id, text: 'Example finding (placeholder)', wo: '000000', rectified: false, rect: '', createdAt: t };
+    const c = { s, findings: [f], photos: [] }, root = safeName(`TEMPLATE_${s.reg}_ARC-Physical`);
+    const zip = new JSZip(), R = zip.folder(root);
+    for (const l of L) R.folder(leafPath(l));
+    R.folder('Findings/' + findingFolder(f));
+    R.file(compXlsxName(s), await buildCompXLSX(c));
+    R.file('Samples.csv', '\ufeff' + [['Sample', 'Type', 'Name', 'P/N', 'S/N', 'Description'], [smNo(s.samples[0]), 'Component', 'Example component', 'P/N', 'S/N', 'Example sample (placeholder)']].map(r => r.map(csvCell).join(';')).join('\r\n'));
+    R.file(reportName(s), await buildReportPDF(c));
+    R.file('Findings.csv', '\ufeff' + [['Finding', 'Item', 'Description (Physical)', 'WO No.', 'Folder'], [fNo(f), f.itemId, f.text, f.wo, 'Findings/' + findingFolder(f)]].map(r => r.map(csvCell).join(';')).join('\r\n'));
+    R.file('Pruefprotokoll.html', protocolHTML(c, new Map(), new Map()));
+    R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, template: true, session: s, findings: [f], photos: [] }, null, 1));
+    const blob = await zip.generateAsync({ type: 'blob' }), name = root + '.zip', file = new File([blob], name, { type: 'application/zip' });
+    if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) { if (e.name !== 'AbortError') throw e; } }
+    else { const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000); }
+  } catch (err) { console.error(err); toast('Template export failed: ' + err.message); }
+  finally { busy(false); }
+}
 async function deleteSession() {
   const c = cur;
   await tx(['sessions', 'findings', 'photos', 'blobs'], 'readwrite', t => {
@@ -1271,6 +1300,7 @@ document.addEventListener('click', async e => {
       }
       case 'saveSession': await saveSession(d.id); break;
       case 'settings': settingsSheet(); break;
+      case 'exportTemplate': exportTemplate(); break;
       case 'sheetCancel': closeSheet(); break;
       case 'sheetBg': if (e.target === el) closeSheet(); break;
       case 'toastAct': { const fn = toastFn; $('#toast').hidden = true; toastFn = null; fn?.(); break; }

@@ -62,6 +62,11 @@ try {
     for (let i = 0; ; i++) { await buildZip(i); n = exportReady.parts.length; const z = await JSZip.loadAsync(exportReady.ready.blob); all.push(...Object.keys(z.files).filter(f => /\.jpg$/.test(f))); if (i + 1 >= n) break; }
     window.__partMax = 0; return { n, all }; });
   ok(z2.n === 3 && new Set(z2.all).size === 3, `multi-part ZIP: ${z2.n} parts, all photos exactly once`);
+  const zt = await pg.evaluate(async () => { let blob; const oc = URL.createObjectURL; URL.createObjectURL = b => { blob = b; return oc(b); };
+    await exportTemplate(); URL.createObjectURL = oc; const z = await JSZip.loadAsync(blob); return Object.keys(z.files); });
+  if (process.env.TEMPLATE_LIST) console.log(zt.join('\n'));
+  ok(['.xlsx', '.pdf', 'Samples.csv', 'Findings.csv', 'Pruefprotokoll.html', 'session.json'].every(x => zt.some(f => f.endsWith(x))) && !zt.some(f => /\.jpe?g$/.test(f)) && zt.some(f => f.includes('/Findings/F01_')),
+    `template ZIP: reports/tables/folders, no photos (${zt.length} entries)`);
 } catch (e) { ok(false, 'exception: ' + e.message); }
 ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 await b.close(); srv.close();
