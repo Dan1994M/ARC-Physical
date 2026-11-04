@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.10.2';
+const APP_VERSION = '0.11.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -340,26 +340,49 @@ async function processImage(file) {
     return { full, type, thumb, w, h };
   } finally { URL.revokeObjectURL(url); }
 }
+const LOW_SPACE = 500 * 1024 * 1024; // Warnschwelle freier Speicher
+async function storageState() {
+  try {
+    const est = await navigator.storage?.estimate?.(); if (!est) return null;
+    return { usage: est.usage || 0, quota: est.quota || 0, free: Math.max(0, (est.quota || 0) - (est.usage || 0)), pers: await navigator.storage?.persisted?.() };
+  } catch { return null; }
+}
+async function warnLowSpace() {
+  const st = await storageState();
+  if (st && st.quota && st.free < LOW_SPACE) toast(`Low storage: only ${fmtMB(st.free)} free – export soon`);
+}
+async function hashFile(file) {
+  try { const d = await crypto.subtle.digest('SHA-256', await file.arrayBuffer()); return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+  catch { return null; }
+}
+
 async function addPhotos(files, ctx) {
   const c = cur; if (!c) return;
   let fid = ctx.fid;
   if (ctx.newFinding) fid = (await createFinding(ctx.item)).id;
   if (files.length > 1) busy(`Saving ${files.length} photos …`);
-  const added = [];
+  const added = [], dups = [];
+  const known = new Map(c.photos.filter(p => p.srcHash).map(p => [p.srcHash, p]));
   try {
     for (const file of files) {
+      const srcHash = await hashFile(file);
+      if (srcHash && known.has(srcHash)) { dups.push(known.get(srcHash)); continue; }
       const r = await processImage(file);
       const meta = { id: uid(), sessionId: c.s.id, itemId: ctx.item, findingId: fid || null, docId: (!fid && ctx.doc) || null, sampleId: (!fid && ctx.sample) || null, thumb: r.thumb,
-        type: r.type, w: r.w, h: r.h, size: r.full.byteLength, createdAt: nowISO(), note: '' };
+        type: r.type, w: r.w, h: r.h, size: r.full.byteLength, createdAt: nowISO(), note: '', srcHash };
       await tx(['photos', 'blobs'], 'readwrite', t => {
         t.objectStore('photos').put(meta);
         t.objectStore('blobs').put({ id: meta.id, buf: r.full, type: r.type });
       });
-      c.photos.push(meta); added.push(meta);
+      c.photos.push(meta); added.push(meta); if (srcHash) known.set(srcHash, meta);
     }
   } finally { busy(false); }
+  const dupMsg = dups.length ? `${dups.length} duplicate${dups.length > 1 ? 's' : ''} skipped (already assigned to ${[...new Set(dups.map(p => p.itemId))].join(', ')})` : '';
+  if (!added.length) { if (ctx.newFinding) await deleteEmptyFinding(fid); render(); toast(dupMsg || 'No photo saved'); return; }
   await touch();
   navigator.storage?.persist?.();
+  warnLowSpace();
+  if (dupMsg) setTimeout(() => toast(dupMsg), 2500);
   if (ctx.newFinding) { location.hash = `#/s/${c.s.id}/f/${fid}`; return; }
   render();
   const n = c.photos.filter(p => p.itemId === ctx.item).length;
@@ -373,6 +396,14 @@ async function deletePhotos(list) {
   c.photos = c.photos.filter(p => !ids.has(p.id));
   for (const id of ids) { const u = thumbURLs.get(id); if (u) { URL.revokeObjectURL(u); thumbURLs.delete(id); } }
   await touch(); render();
+}
+async function deleteEmptyFinding(fid) {
+  const c = cur; if (!fid || c.photos.some(p => p.findingId === fid)) return;
+  const f = c.findings.find(x => x.id === fid);
+  await tx(['findings'], 'readwrite', t => t.objectStore('findings').delete(fid));
+  c.findings = c.findings.filter(x => x.id !== fid);
+  if (f && f.num === c.s.findingSeq) c.s.findingSeq--; // keine Lücke in der Nummerierung
+  await touch();
 }
 async function createFinding(itemId) {
   const c = cur;
@@ -730,8 +761,8 @@ async function settingsSheet() {
   <div class="row2"><button class="btn pri" data-act="sheetCancel">Done</button></div>`);
   $('#setQ').onchange = e => { settings.quality = e.target.value; saveSettings(); };
   try {
-    const est = await navigator.storage?.estimate?.(); const pers = await navigator.storage?.persisted?.();
-    $('#storInfo').textContent = est ? `${fmtMB(est.usage || 0)} used · persistent storage: ${pers ? 'yes' : 'not confirmed (add app to Home Screen)'}` : 'not available';
+    const st = await storageState();
+    $('#storInfo').innerHTML = st ? `${fmtMB(st.usage)} used · ${st.quota ? `<b class="${st.free < LOW_SPACE ? 'bad' : ''}">${fmtMB(st.free)} free</b>` : 'free space unknown'}<br>Persistent storage: ${st.pers ? 'yes' : 'not confirmed (add app to Home Screen)'}` : 'not available';
   } catch { $('#storInfo').textContent = 'not available'; }
 }
 
@@ -1302,4 +1333,6 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     });
   }).catch(() => {});
 }
+navigator.storage?.persist?.().catch(() => {});
+warnLowSpace();
 render();

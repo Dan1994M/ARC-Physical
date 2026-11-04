@@ -30,9 +30,14 @@ try {
   const sid = (await pg.evaluate(() => location.hash)).split('/')[2];
   await pg.evaluate(() => { HTMLInputElement.prototype.click = function () {}; }); // Kamera-Dialog unterdrücken
   const go = async h => { await pg.goto(`${base}#/s/${sid}/${h}`); await pg.waitForTimeout(250); };
-  const shot = async () => { await pg.setInputFiles('#camIn', img); await pg.waitForTimeout(600); };
+  let shotN = 0; // je Aufnahme eindeutige Bytes (nach JPEG-EOI angehängt), sonst greift der Duplikat-Schutz
+  const shot = async (same = false) => { if (!same) shotN++; await pg.setInputFiles('#camIn', { ...img, buffer: Buffer.concat([jpg, Buffer.from([shotN])]) }); await pg.waitForTimeout(600); };
   await go('i/1.1'); await pg.click('.bbar [data-act=cam]'); await shot();
   ok(await pg.evaluate(() => cur.photos.length === 1), 'photo saved');
+  await go('i/1.2'); await pg.click('.bbar [data-act=cam]'); await shot(true);
+  ok(await pg.evaluate(() => cur.photos.length === 1), 'duplicate photo skipped');
+  await go('i/5.3.1'); await pg.click('[data-act=camFinding]'); await shot(true); await pg.waitForTimeout(300);
+  ok(await pg.evaluate(() => cur.findings.length === 0 && cur.s.findingSeq === 0), 'duplicate in new finding: no empty finding left');
   await go('i/5.3.1'); await pg.click('[data-act=camFinding]'); await shot(); await pg.fill('[data-field=fText]', 'Test finding'); await pg.fill('[data-field=fWO]', 'WO1');
   await pg.waitForTimeout(600); ok(await pg.evaluate(() => cur.findings.length === 1 && cur.findings[0].wo === 'WO1'), 'finding with WO');
   await go('i/5.3.1'); await pg.click('[data-act=smNew]'); await pg.click('.sheet button.pri[data-act=smCreate]'); await shot();
