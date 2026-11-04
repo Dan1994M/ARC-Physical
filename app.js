@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.14.2';
+const APP_VERSION = '0.14.3';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -946,7 +946,9 @@ function closeEditor() {
 window.addEventListener('resize', () => setTimeout(edLayout, 100));
 
 /* ---------------- Export ---------------- */
-function csvCell(v) { const s = String(v ?? ''); return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
+// Excel wandelt z. B. 5.3 in ein Datum bzw. lange WO-Nr. in Exponentialschreibweise -> als Textformel ="…" ausgeben.
+const csvAsText = s => /^\d[\d./-]*$/.test(s) && (/[./-]/.test(s) || s.length > 11 || /^0\d/.test(s));
+function csvCell(v) { let s = String(v ?? ''); if (csvAsText(s)) s = `="${s}"`; return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
 const FINDINGS_DIR = '7 Finding Rectification Data';
 const findingFolder = f => safeName(`${fNo(f)}_${f.itemId}_${f.wo?.trim() ? 'WO' + f.wo.trim() : 'no-WO'}`);
 const encPath = p => p.split('/').map(encodeURIComponent).join('/');
