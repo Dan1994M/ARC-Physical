@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.18.2';
+const APP_VERSION = '0.18.3';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -1028,7 +1028,7 @@ function addXlTable(z, name, ref, head) {
   z.file('xl/tables/table1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="${name}" displayName="${name}" ref="${ref}" totalsRowShown="0"><autoFilter ref="${ref}"/>
 <tableColumns count="${head.length}">${head.map((h, i) => `<tableColumn id="${i + 1}" name="${esc2(h)}"/>`).join('')}</tableColumns>
-<tableStyleInfo name="ARC Grid" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>`);
+<tableStyleInfo name="TableStyleLight15" showFirstColumn="0" showLastColumn="0" showRowStripes="0" showColumnStripes="0"/></table>`);
   z.file('xl/worksheets/_rels/sheet1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/></Relationships>`);
 }
@@ -1115,8 +1115,6 @@ function xlStyles() {
 <xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
-<dxfs count="2"><dxf><border><left style="thin"><color rgb="FF595959"/></left><right style="thin"><color rgb="FF595959"/></right><top style="thin"><color rgb="FF595959"/></top><bottom style="thin"><color rgb="FF595959"/></bottom><vertical style="thin"><color rgb="FF595959"/></vertical><horizontal style="thin"><color rgb="FF595959"/></horizontal></border></dxf><dxf><font><b/></font><fill><patternFill patternType="solid"><bgColor rgb="FFEBEEF2"/></patternFill></fill></dxf></dxfs>
-<tableStyles count="1" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"><tableStyle name="ARC Grid" pivot="0" count="2"><tableStyleElement type="wholeTable" dxfId="0"/><tableStyleElement type="headerRow" dxfId="1"/></tableStyle></tableStyles>
 </styleSheet>`;
 }
 async function buildCompXLSX(c) {
