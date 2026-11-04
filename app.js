@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.14.1';
+const APP_VERSION = '0.14.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -947,6 +947,7 @@ window.addEventListener('resize', () => setTimeout(edLayout, 100));
 
 /* ---------------- Export ---------------- */
 function csvCell(v) { const s = String(v ?? ''); return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
+const FINDINGS_DIR = '7 Finding Rectification Data';
 const findingFolder = f => safeName(`${fNo(f)}_${f.itemId}_${f.wo?.trim() ? 'WO' + f.wo.trim() : 'no-WO'}`);
 const encPath = p => p.split('/').map(encodeURIComponent).join('/');
 
@@ -1138,7 +1139,7 @@ function planExport(c) {
   for (const p of photos) {
     const ext = extOf(p.type), f = p.findingId && c.findings.find(x => x.id === p.findingId);
     let path;
-    if (f) { const fn = findingFolder(f); cnt[fn] = (cnt[fn] || 0) + 1; path = `Findings/${fn}/${fn}_${pad(cnt[fn])}.${ext}`; }
+    if (f) { const fn = findingFolder(f); cnt[fn] = (cnt[fn] || 0) + 1; path = `${FINDINGS_DIR}/${fn}/${fn}_${pad(cnt[fn])}.${ext}`; }
     else {
       const l = L.find(x => x.id === p.itemId) || { id: p.itemId, folder: 'Unassigned', parents: [] };
       const d = p.docId && l.docs?.find(x => x.id === p.docId), sm = p.sampleId && (s.samples || []).find(x => x.id === p.sampleId);
@@ -1174,10 +1175,11 @@ async function buildZip(idx = 0) {
   try {
     if (idx === 0) {
       for (const l of leaves(s)) R.folder(leafPath(l)); // vollständige Ordnerstruktur, auch leere
+      R.folder(FINDINGS_DIR);
       const fs = [...c.findings].sort((a, b) => a.num - b.num);
       const head = ['Finding', 'Item', 'Item Title', 'Description (Physical)', 'WO No.', 'Rectified', 'Rectification', 'No. of Photos', 'Folder', 'Created', 'WO Wording (manual)'];
       const rows = fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'yes' : 'no', f.rect,
-        c.photos.filter(p => p.findingId === f.id).length, 'Findings/' + findingFolder(f), fmtDT(f.createdAt), '']);
+        c.photos.filter(p => p.findingId === f.id).length, FINDINGS_DIR + '/' + findingFolder(f), fmtDT(f.createdAt), '']);
       const sHead = ['Sample', 'Type', 'Name', 'Pre-selected', 'Origin Item', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'No. of Photos', 'Created'];
       const sRows = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [smNo(x), SAMPLE_KINDS[x.kind].label, x.name || '', x.pre ? 'yes' : '', smOrigin(s, x),
         x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)]);
@@ -1231,11 +1233,11 @@ async function exportTemplate() {
     const c = { s, findings: [f], photos: [] }, root = safeName(`TEMPLATE_${s.reg}_ARC-Physical`);
     const zip = new JSZip(), R = zip.folder(root);
     for (const l of L) R.folder(leafPath(l));
-    R.folder('Findings/' + findingFolder(f));
+    R.folder(FINDINGS_DIR + '/' + findingFolder(f));
     R.file(compXlsxName(s), await buildCompXLSX(c));
     R.file('Samples.csv', '\ufeff' + [['Sample', 'Type', 'Name', 'P/N', 'S/N', 'Description'], [smNo(s.samples[0]), 'Component', 'Example component', 'P/N', 'S/N', 'Example sample (placeholder)']].map(r => r.map(csvCell).join(';')).join('\r\n'));
     R.file(reportName(s), await buildReportPDF(c));
-    R.file('Findings.csv', '\ufeff' + [['Finding', 'Item', 'Description (Physical)', 'WO No.', 'Folder'], [fNo(f), f.itemId, f.text, f.wo, 'Findings/' + findingFolder(f)]].map(r => r.map(csvCell).join(';')).join('\r\n'));
+    R.file('Findings.csv', '\ufeff' + [['Finding', 'Item', 'Description (Physical)', 'WO No.', 'Folder'], [fNo(f), f.itemId, f.text, f.wo, FINDINGS_DIR + '/' + findingFolder(f)]].map(r => r.map(csvCell).join(';')).join('\r\n'));
     R.file('Pruefprotokoll.html', protocolHTML(c, new Map(), new Map()));
     R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, template: true, session: s, findings: [f], photos: [] }, null, 1));
     const blob = await zip.generateAsync({ type: 'blob' }), name = root + '.zip';

@@ -1,4 +1,4 @@
-# ARC Physical Helper – v0.14.1
+# ARC Physical Helper – v0.14.2
 
 Offline-PWA zur Durchführung und Nachbereitung des ARC Physical Survey. Alle Daten bleiben lokal auf dem Gerät (IndexedDB).
 
@@ -19,7 +19,7 @@ Pflichtfotos je Punkt: `minPhotos` (Standard 1).
 <Datum>_<Reg>_ARC-Physical/
   1 AC Placards & Markings/1_001.jpg …
   5 AC Exterior Inspection/5.3 Exterior - Engine Condition/5.3_001.jpg …
-  Findings/F01_5.3_WO123456/F01_5.3_WO123456_01.jpg   ← hier die WO-PDF ablegen
+  7 Finding Rectification Data/F01_5.3_WO123456/F01_5.3_WO123456_01.jpg   ← hier die WO-PDF ablegen
   <Reg>_Component Samples_<Datum>.xlsx  (6.1, Querformat, Tickboxen On A/C / In Equipment List)
   Findings.csv         (Excel, Semikolon, Spalten für WO-Wortlaut/Rectification)
   Pruefprotokoll.html  (Status aller Prüfpunkte, Findings, Foto-Galerie; druckbar als PDF)
