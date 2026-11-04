@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.15.0';
+const APP_VERSION = '0.15.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -1005,19 +1005,19 @@ async function buildTableXLSX(sheetName, head, rows, widths = []) {
 }
 function findingsTable(c) {
   const s = c.s, fs = [...c.findings].sort((a, b) => a.num - b.num);
-  return [['Finding', 'Item', 'Item Title', 'Description (Physical)', 'WO No.', 'Rectified', 'Rectification', 'No. of Photos', 'Folder', 'Created', 'WO Wording (manual)'],
-    fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'yes' : 'no', f.rect,
-      c.photos.filter(p => p.findingId === f.id).length, FINDINGS_DIR + '/' + findingFolder(f), fmtDT(f.createdAt), ''])];
+  return [['Finding', 'Item', 'Item Title', 'Description (Physical)', 'WO No.', 'Folder', 'Created', 'WO Wording (manual)'],
+    fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo,
+      FINDINGS_DIR + '/' + findingFolder(f), fmtDT(f.createdAt), ''])];
 }
 function samplesTable(c) {
   const s = c.s;
-  return [['Sample', 'Type', 'Name', 'Pre-selected', 'Origin Item', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'No. of Photos', 'Created'],
-    Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [smNo(x), SAMPLE_KINDS[x.kind].label, x.name || '', x.pre ? 'yes' : '', smOrigin(s, x),
-      x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)])];
+  return [['Sample', 'Name', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'Created'],
+    Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [smNo(x), x.name || '',
+      x.pn, x.sn, x.row, x.side, x.desc, fmtDT(x.createdAt)])];
 }
 const tableFiles = async (R, c) => {
   R.file('Samples.xlsx', await buildTableXLSX('Samples', ...samplesTable(c)));
-  R.file('Findings.xlsx', await buildTableXLSX('Findings', ...findingsTable(c), [8, 9, 28, 45, 12, 9, 40, 9, 32, 16, 45]));
+  R.file('Findings.xlsx', await buildTableXLSX('Findings', ...findingsTable(c), [8, 9, 28, 45, 12, 32, 16, 45]));
 };
 async function buildCompXLSX(c) {
   const s = c.s, list = samplesOf(s, 'comp');
