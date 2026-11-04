@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.12.0';
+const APP_VERSION = '0.12.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -968,7 +968,7 @@ async function buildCompXLSX(c) {
   rows.push(`<row r="4" ht="20" customHeight="1">${H.map((h, i) => str('ABCDEFG'[i] + 4, h, 5)).join('')}</row>`);
   list.forEach((sm, i) => {
     const r = i + 5;
-    rows.push(`<row r="${r}">${str('A' + r, smNo(sm), 6)}${str('B' + r, [sm.name, sm.desc].filter(Boolean).join(' – '), 6)}${str('C' + r, sm.pn, 6)}${str('D' + r, sm.sn, 6)}${box('E' + r)}${box('F' + r)}${str('G' + r, '', 6)}</row>`);
+    rows.push(`<row r="${r}">${str('A' + r, '6.1.' + sm.num, 6)}${str('B' + r, [sm.name, sm.desc].filter(Boolean).join(' – '), 6)}${str('C' + r, sm.pn, 6)}${str('D' + r, sm.sn, 6)}${box('E' + r)}${box('F' + r)}${str('G' + r, '', 6)}</row>`);
   });
   const last = Math.max(4, list.length + 4);
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
