@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.18.0';
+const APP_VERSION = '0.18.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -1043,12 +1043,12 @@ async function buildTableXLSX(sheetName, head, rows, widths = []) {
   const sd = all.map((r, i) => `<row r="${i + 1}">${r.map((v, j) => cell(xlCol(j) + (i + 1), v, i ? 2 : 1)).join('')}</row>`).join('');
   const cols = head.map((h, j) => `<col min="${j + 1}" max="${j + 1}" width="${widths[j] || Math.min(50, Math.max(10, h.length + 2, ...rows.map(r => String(r[j] ?? '').length + 2)))}" customWidth="1"/>`).join('');
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
-<cols>${cols}</cols><sheetData>${sd}</sheetData><pageSetup orientation="landscape" fitToHeight="0"/><tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<cols>${cols}</cols><sheetData>${sd}</sheetData><pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/><tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`;
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>
 <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/></patternFill></fill></fills>
-<borders count="2"><border/><border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom></border></borders>
+<borders count="2"><border/><border><left style="thin"><color rgb="FF595959"/></left><right style="thin"><color rgb="FF595959"/></right><top style="thin"><color rgb="FF595959"/></top><bottom style="thin"><color rgb="FF595959"/></bottom><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="4"><xf/>
 <xf numFmtId="49" fontId="1" borderId="1" applyNumberFormat="1" applyFont="1" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>
 <xf numFmtId="49" borderId="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
@@ -1119,7 +1119,7 @@ async function buildCompXLSX(c) {
 <tableParts count="1"><tablePart r:id="rId1"/></tableParts>
 </worksheet>`;
   const font = (sz, b) => `<font>${b ? '<b/>' : ''}<sz val="${sz}"/><name val="Arial"/><family val="2"/></font>`;
-  const bd = '<border><left style="thin"><color rgb="FFAAAAAA"/></left><right style="thin"><color rgb="FFAAAAAA"/></right><top style="thin"><color rgb="FFAAAAAA"/></top><bottom style="thin"><color rgb="FFAAAAAA"/></bottom><diagonal/></border>';
+  const bd = '<border><left style="thin"><color rgb="FF595959"/></left><right style="thin"><color rgb="FF595959"/></right><top style="thin"><color rgb="FF595959"/></top><bottom style="thin"><color rgb="FF595959"/></bottom><diagonal/></border>';
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:xfpb="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag" mc:Ignorable="xfpb">
 <fonts count="5">${font(10)}${font(15, 1)}${font(12, 1)}${font(9)}${font(9, 1)}</fonts>
