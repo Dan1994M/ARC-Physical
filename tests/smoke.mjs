@@ -63,6 +63,11 @@ try {
     for (let i = 0; ; i++) { await buildZip(i); n = exportReady.parts.length; const z = await JSZip.loadAsync(exportReady.ready.blob); all.push(...Object.keys(z.files).filter(f => /\.jpg$/.test(f))); if (i + 1 >= n) break; }
     window.__partMax = 0; return { n, all }; });
   ok(z2.n === 3 && new Set(z2.all).size === 3, `multi-part ZIP: ${z2.n} parts, all photos exactly once`);
+  const sup = await pg.evaluate(async () => { window.__partMax = 0; await addSupport([new File(['%PDF-1.4 test'], 'LOPA.pdf', { type: 'application/pdf' })], 'lopa');
+    const d = cur.s.support[0], b = await get('blobs', 'sup:' + d.id); location.hash = `#/s/${cur.s.id}/i/6.2`; await new Promise(r => setTimeout(r, 300));
+    const shown = !!document.querySelector(`[data-act=supOpen][data-id="${d.id}"]`); await deleteSupport(d.id);
+    return { ok: !!b && shown, gone: !(await get('blobs', 'sup:' + d.id)) && !cur.s.support.length }; });
+  ok(sup.ok && sup.gone, 'support document: add, shown in 6.2, delete');
   const zt = await pg.evaluate(async () => { let blob; const oc = URL.createObjectURL; URL.createObjectURL = b => { blob = b; return oc(b); };
     await exportTemplate(); URL.createObjectURL = oc; const z = await JSZip.loadAsync(blob); return Object.keys(z.files); });
   if (process.env.TEMPLATE_LIST) console.log(zt.join('\n'));

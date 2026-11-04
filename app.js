@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.15.3';
+const APP_VERSION = '0.16.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -515,6 +515,8 @@ function viewItem(c, id) {
   // Hinweise des Prüfpunkts, sonst vom nächsten Elternknoten (z. B. 5.3 -> 5.3.1/5.3.2/5.3.3)
   const hi = [l, ...[...(l.parents || [])].reverse()].map(n => HINTS[n.id]).find(Boolean);
   if (hi?.length) h += `<details class="card pad hints"><summary class="lbl">What to look for</summary><ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
+  const supK = l.samples || (l.id === SAMPLE_KINDS.eel.item ? 'eel' : null);
+  if (supK) h += `<div class="card pad">${supportBox(c, supK)}</div>`;
   const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated);
   if (l.docs) {
     for (const d of l.docs) {
@@ -582,6 +584,34 @@ function viewFinding(c, fid) {
   h += `<div class="bbar"><button class="btn pri big grow" data-act="cam" data-item="${f.itemId}" data-fid="${f.id}">📷 Photo for finding</button></div>`;
   return h;
 }
+/* Support-Dokumente (z. B. LOPA-PDF aus OneDrive) je Sample-Art: nur zum Nachschlagen, nicht im Export. */
+function supportBox(c, kind) {
+  const list = (c.s.support || []).filter(d => d.kind === kind);
+  return `<div class="sup"><div class="lbl">Support documents <span class="mut">(${esc(SAMPLE_KINDS[kind].label)}, not exported)</span></div>${list.map(d =>
+    `<div class="sup-r"><button class="link grow" data-act="supOpen" data-id="${d.id}">${/pdf/.test(d.type) ? '📄' : '🖼️'} ${esc(d.name)}</button><span class="mut sm">${fmtMB(d.size)}</span><button class="link bad" data-act="supDel" data-id="${d.id}">Delete</button></div>`).join('')}
+  <button class="link" data-act="supAdd" data-kind="${kind}">＋ Add document (PDF / image)</button></div>`;
+}
+async function addSupport(files, kind) {
+  const s = cur.s; s.support ||= [];
+  for (const f of files) {
+    const id = uid(), buf = await f.arrayBuffer();
+    await put('blobs', { id: 'sup:' + id, buf });
+    s.support.push({ id, kind, name: f.name, type: f.type || 'application/pdf', size: f.size, createdAt: nowISO() });
+  }
+  await touch(); render(); warnLowSpace();
+}
+async function openSupport(id) {
+  const d = (cur.s.support || []).find(x => x.id === id), b = d && await get('blobs', 'sup:' + id);
+  if (!b) { toast('Document not found'); return; }
+  const u = URL.createObjectURL(new Blob([b.buf], { type: d.type })), a = document.createElement('a');
+  a.href = u; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 300000);
+}
+async function deleteSupport(id) {
+  const s = cur.s; s.support = (s.support || []).filter(x => x.id !== id);
+  await tx(['blobs'], 'readwrite', t => t.objectStore('blobs').delete('sup:' + id));
+  await touch(); render();
+}
 function viewPrep(c) {
   const s = c.s, d = s.prep || {}, ps = prepState(s);
   let h = topbar(s.reg, sessSub(s), '#/') + tabs(c, 'prep') + '<main class="wrap">';
@@ -591,7 +621,7 @@ function viewPrep(c) {
     if (!x.kind || !d[x.id]) continue;
     const k = SAMPLE_KINDS[x.kind], list = samplesOf(s, x.kind).filter(sm => sm.pre);
     for (const sm of list) h += `<div class="pre-sm"><div class="sm-h"><b>${smNo(sm)}</b><span class="mut grow">📷 ${c.photos.filter(p => p.sampleId === sm.id).length}</span><button class="link bad" data-act="smDel" data-sid="${sm.id}">Delete</button></div>${smFields(sm, lopaSides(s.type))}</div>`;
-    h += `<button class="btn block pre-add" data-act="smPre" data-kind="${x.kind}">＋ Add ${esc(k.label)} sample → ${k.item}</button>`;
+    h += `<button class="btn block pre-add" data-act="smPre" data-kind="${x.kind}">＋ Add ${esc(k.label)} sample → ${k.item}</button>` + supportBox(c, x.kind);
   }
   h += `<label class="lbl" style="margin-top:14px;display:block">Notes</label><textarea class="inp" rows="3" data-field="prepNote" placeholder="e.g. pre-selected samples, open questions">${esc(s.prepNote || '')}</textarea></div>`;
   return h + '</main>';
@@ -1294,6 +1324,7 @@ async function deleteSession() {
   await tx(['sessions', 'findings', 'photos', 'blobs'], 'readwrite', t => {
     t.objectStore('sessions').delete(c.s.id);
     for (const f of c.findings) t.objectStore('findings').delete(f.id);
+    for (const d of c.s.support || []) t.objectStore('blobs').delete('sup:' + d.id);
     for (const p of c.photos) { t.objectStore('photos').delete(p.id); t.objectStore('blobs').delete(p.id); t.objectStore('blobs').delete(p.id + '#ann'); }
   });
   revokeThumbs(); cur = null; exportReady = null; reportReady = null; location.hash = '#/';
@@ -1308,6 +1339,9 @@ document.addEventListener('click', async e => {
       // Kamera muss synchron im Klick ausgelöst werden (User-Geste)
       case 'cam': capture = { item: d.item, sample: d.sample || null, doc: d.doc || null, fid: d.fid || null, newFinding: false }; $('#camIn').click(); break;
       case 'camFinding': capture = { item: d.item, fid: null, newFinding: true }; $('#camIn').click(); break;
+      case 'supAdd': capture = { support: d.kind }; $('#supIn').click(); break;
+      case 'supOpen': openSupport(d.id); break;
+      case 'supDel': if (confirm('Delete this support document?')) deleteSupport(d.id); break;
       case 'library': capture = { item: d.item, sample: d.sample || null, doc: d.doc || null, fid: d.fid || null, newFinding: false }; $('#libIn').click(); break;
       case 'newFindingNoPhoto': { const f = await createFinding(d.item); location.hash = `#/s/${c.s.id}/f/${f.id}`; break; }
       case 'setStatus': { const st = itemState(c.s, d.item); st.status = d.v; st.changedAt = nowISO(); await touch(); render(); break; }
@@ -1459,6 +1493,13 @@ async function onField(el, commit) {
 document.addEventListener('input', e => { if (e.target.dataset.field) onField(e.target, false).catch(console.error); });
 document.addEventListener('change', e => { if (e.target.dataset.field) onField(e.target, true).catch(err => toast('Error: ' + err.message)); });
 
+$('#supIn').addEventListener('change', async () => {
+  const inp = $('#supIn'), files = [...inp.files]; inp.value = '';
+  const ctx = capture; capture = null;
+  if (!files.length || !ctx?.support) return;
+  busy('Saving document …');
+  try { await addSupport(files, ctx.support); } catch (err) { console.error(err); toast('Document not saved: ' + err.message); } finally { busy(false); }
+});
 for (const id of ['camIn', 'libIn']) {
   const inp = $('#' + id);
   inp.addEventListener('change', async () => {

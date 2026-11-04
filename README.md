@@ -1,4 +1,4 @@
-# ARC Physical Helper – v0.15.3
+# ARC Physical Helper – v0.16.0
 
 Offline-PWA zur Durchführung und Nachbereitung des ARC Physical Survey. Alle Daten bleiben lokal auf dem Gerät (IndexedDB).
 
@@ -26,6 +26,9 @@ Pflichtfotos je Punkt: `minPhotos` (Standard 1).
   Pruefprotokoll.html  (Status aller Prüfpunkte, Findings, Foto-Galerie; druckbar als PDF)
   session.json         (Rohdaten)
 ```
+
+## Support-Dokumente
+Je Sample-Art (EEL, LOPA, D&B, MOD/STC, Component) PDFs/Bilder hinterlegen (iOS-Dateiauswahl, z. B. OneDrive) – in Preparation und im jeweiligen Prüfpunkt (4.1, 6.x) abrufbar. Nur lokal zum Nachschlagen, nicht im Export.
 
 ## Smoke-Test (vor jedem Push)
 
