@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.14.0';
+const APP_VERSION = '0.14.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -766,7 +766,7 @@ async function settingsSheet() {
   <div class="mut sm">“Original” keeps full resolution and EXIF data but creates very large exports. “High” keeps placards legible and the ZIP export on the iPhone more stable.</div>
   <div class="lbl">Storage</div><div class="sm" id="storInfo">…</div>
   <div class="lbl">Export template</div>
-  <button class="btn" data-act="exportTemplate">📁 Export template folder (ZIP)</button>
+  <button class="btn" data-act="exportTemplate">⬇︎ Download template folder (ZIP)</button>
   <div class="mut sm">Shows the folder structure and all reports/tables of a finished physical, filled with placeholder data (no photos). Always reflects the current app version.</div>
   <div class="mut sm">Version ${APP_VERSION}. Data stays on this device only.</div>
   <div class="row2"><button class="btn pri" data-act="sheetCancel">Done</button></div>`);
@@ -1238,9 +1238,8 @@ async function exportTemplate() {
     R.file('Findings.csv', '\ufeff' + [['Finding', 'Item', 'Description (Physical)', 'WO No.', 'Folder'], [fNo(f), f.itemId, f.text, f.wo, 'Findings/' + findingFolder(f)]].map(r => r.map(csvCell).join(';')).join('\r\n'));
     R.file('Pruefprotokoll.html', protocolHTML(c, new Map(), new Map()));
     R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, template: true, session: s, findings: [f], photos: [] }, null, 1));
-    const blob = await zip.generateAsync({ type: 'blob' }), name = root + '.zip', file = new File([blob], name, { type: 'application/zip' });
-    if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) { if (e.name !== 'AbortError') throw e; } }
-    else { const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000); }
+    const blob = await zip.generateAsync({ type: 'blob' }), name = root + '.zip';
+    const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000);
   } catch (err) { console.error(err); toast('Template export failed: ' + err.message); }
   finally { busy(false); }
 }
