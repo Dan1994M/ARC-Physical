@@ -55,8 +55,9 @@ try {
   ok(pdf.startsWith('%PDF-'), `finding report PDF (${pdf.split('|')[1]} bytes)`);
   const z1 = await pg.evaluate(async () => { await buildZip(0); const z = await JSZip.loadAsync(exportReady.ready.blob); return { parts: exportReady.parts.length, files: Object.keys(z.files).filter(n => !n.endsWith('/')) }; });
   ok(z1.parts === 1 && z1.files.filter(f => /\.jpg$/.test(f)).length === 3, `single ZIP with 3 photos`);
-  ok(['Findings.csv', 'Samples.csv', 'Pruefprotokoll.html', 'session.json'].every(n => z1.files.some(f => f.endsWith('/' + n))) && z1.files.some(f => f.endsWith('.pdf')), 'ZIP contains CSVs, protocol, json, report PDF');
+  ok(['Findings.xlsx', 'Samples.xlsx', 'Pruefprotokoll.html', 'session.json'].every(n => z1.files.some(f => f.endsWith('/' + n))) && z1.files.some(f => f.endsWith('.pdf')), 'ZIP contains tables, protocol, json, report PDF');
   ok(z1.files.some(f => /_Component Samples_.*\.xlsx$/.test(f)), 'ZIP contains component samples XLSX');
+  if (process.env.TABLE_OUT) { const b = await pg.evaluate(async () => { const z = await JSZip.loadAsync(exportReady.ready.blob); const f = Object.keys(z.files).find(n => n.endsWith('/Findings.xlsx')); return Array.from(await z.file(f).async('uint8array')); }); fs.writeFileSync(process.env.TABLE_OUT, Buffer.from(b)); }
   if (process.env.XLSX_OUT) { const b = await pg.evaluate(async () => Array.from(await buildCompXLSX(cur))); (await import('fs')).writeFileSync(process.env.XLSX_OUT, Buffer.from(b)); }
   const z2 = await pg.evaluate(async () => { window.__partMax = 1; await touch(); const all = []; let n = 0;
     for (let i = 0; ; i++) { await buildZip(i); n = exportReady.parts.length; const z = await JSZip.loadAsync(exportReady.ready.blob); all.push(...Object.keys(z.files).filter(f => /\.jpg$/.test(f))); if (i + 1 >= n) break; }
@@ -65,7 +66,7 @@ try {
   const zt = await pg.evaluate(async () => { let blob; const oc = URL.createObjectURL; URL.createObjectURL = b => { blob = b; return oc(b); };
     await exportTemplate(); URL.createObjectURL = oc; const z = await JSZip.loadAsync(blob); return Object.keys(z.files); });
   if (process.env.TEMPLATE_LIST) console.log(zt.join('\n'));
-  ok(['.xlsx', '.pdf', 'Samples.csv', 'Findings.csv', 'Pruefprotokoll.html', 'session.json'].every(x => zt.some(f => f.endsWith(x))) && !zt.some(f => /\.jpe?g$/.test(f)) && zt.some(f => f.includes('/7 Finding Rectification Data/F01_')),
+  ok(['.xlsx', '.pdf', 'Samples.xlsx', 'Findings.xlsx', 'Pruefprotokoll.html', 'session.json'].every(x => zt.some(f => f.endsWith(x))) && !zt.some(f => /\.jpe?g$/.test(f)) && zt.some(f => f.includes('/7 Finding Rectification Data/F01_')),
     `template ZIP: reports/tables/folders, no photos (${zt.length} entries)`);
 } catch (e) { ok(false, 'exception: ' + e.message); }
 ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));

@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.14.3';
+const APP_VERSION = '0.15.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -644,7 +644,7 @@ function viewClose(c) {
   const size = c.photos.reduce((a, p) => a + (p.size || 0), 0);
   const exp = s.exportedAt && s.modifiedAt <= s.exportedAt;
   h += `<div class="card pad"><div class="lbl">Export (ZIP)</div>
-  <div class="sm">${c.photos.length} photos · approx. ${fmtMB(size)} · folder structure per checklist item, findings folder, Findings.csv, inspection report</div>
+  <div class="sm">${c.photos.length} photos · approx. ${fmtMB(size)} · folder structure per checklist item, findings folder, Findings + Samples tables, inspection report</div>
   <div class="sm ${exp ? 'ok' : 'bad'}">${s.exportedAt ? (exp ? 'Exported ' + fmtDT(s.exportedAt) : 'Changed since last export') : 'Not exported yet'}</div>`;
   const X = exportReady && exportReady.sid === s.id ? exportReady : null;
   const plan = X || planExport(c);
@@ -946,9 +946,6 @@ function closeEditor() {
 window.addEventListener('resize', () => setTimeout(edLayout, 100));
 
 /* ---------------- Export ---------------- */
-// Excel wandelt z. B. 5.3 in ein Datum bzw. lange WO-Nr. in Exponentialschreibweise -> als Textformel ="…" ausgeben.
-const csvAsText = s => /^\d[\d./-]*$/.test(s) && (/[./-]/.test(s) || s.length > 11 || /^0\d/.test(s));
-function csvCell(v) { let s = String(v ?? ''); if (csvAsText(s)) s = `="${s}"`; return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
 const FINDINGS_DIR = '7 Finding Rectification Data';
 const findingFolder = f => safeName(`${fNo(f)}_${f.itemId}_${f.wo?.trim() ? 'WO' + f.wo.trim() : 'no-WO'}`);
 const encPath = p => p.split('/').map(encodeURIComponent).join('/');
@@ -969,6 +966,59 @@ const inReport = p => reportPhotos(cur, p.findingId).includes(p);
    Layout wie Finding Report: Reg fett groß, Titel, Unterzeile, graue Kopfzeile.
    Tickboxen = native Excel-365-Kontrollkästchen (Zellformat); ältere Excel-Versionen zeigen FALSCH/WAHR. */
 const compXlsxName = s => safeName(`${s.reg}_Component Samples_${todayYMD()}.xlsx`);
+/* Einfache Tabellen-XLSX (Findings / Samples): Kopfzeile fett, Filter, fixiert; Text als Textformat (@), damit Excel 5.3 nicht als Datum liest. */
+const xlCol = i => { let r = ''; for (i++; i; i = (i - 1) / 26 | 0) r = String.fromCharCode(65 + (i - 1) % 26) + r; return r; };
+async function buildTableXLSX(sheetName, head, rows, widths = []) {
+  const x = v => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const cell = (ref, v, st) => typeof v === 'number' ? `<c r="${ref}" s="${st === 1 ? 1 : 3}"><v>${v}</v></c>` : `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  const all = [head, ...rows], last = xlCol(head.length - 1) + all.length;
+  const sd = all.map((r, i) => `<row r="${i + 1}">${r.map((v, j) => cell(xlCol(j) + (i + 1), v, i ? 2 : 1)).join('')}</row>`).join('');
+  const cols = head.map((h, j) => `<col min="${j + 1}" max="${j + 1}" width="${widths[j] || Math.min(50, Math.max(10, h.length + 2, ...rows.map(r => String(r[j] ?? '').length + 2)))}" customWidth="1"/>`).join('');
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<cols>${cols}</cols><sheetData>${sd}</sheetData><autoFilter ref="A1:${last}"/><pageSetup orientation="landscape" fitToHeight="0"/></worksheet>`;
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/></patternFill></fill></fills>
+<borders count="2"><border/><border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom></border></borders>
+<cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="4"><xf/>
+<xf numFmtId="49" fontId="1" fillId="2" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="49" borderId="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf></cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const z = new JSZip(), nm = x(sheetName).replace(/'/g, "''");
+  z.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
+  z.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  z.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${nm}" sheetId="1" r:id="rId1"/></sheets>
+<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${nm}'!$A$1:$${last.replace(/(\d+)$/, '$$$1')}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'${nm}'!$1:$1</definedName></definedNames></workbook>`);
+  z.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  z.file('xl/worksheets/sheet1.xml', sheet);
+  z.file('xl/styles.xml', styles);
+  return z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+}
+function findingsTable(c) {
+  const s = c.s, fs = [...c.findings].sort((a, b) => a.num - b.num);
+  return [['Finding', 'Item', 'Item Title', 'Description (Physical)', 'WO No.', 'Rectified', 'Rectification', 'No. of Photos', 'Folder', 'Created', 'WO Wording (manual)'],
+    fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'yes' : 'no', f.rect,
+      c.photos.filter(p => p.findingId === f.id).length, FINDINGS_DIR + '/' + findingFolder(f), fmtDT(f.createdAt), ''])];
+}
+function samplesTable(c) {
+  const s = c.s;
+  return [['Sample', 'Type', 'Name', 'Pre-selected', 'Origin Item', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'No. of Photos', 'Created'],
+    Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [smNo(x), SAMPLE_KINDS[x.kind].label, x.name || '', x.pre ? 'yes' : '', smOrigin(s, x),
+      x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)])];
+}
+const tableFiles = async (R, c) => {
+  R.file('Samples.xlsx', await buildTableXLSX('Samples', ...samplesTable(c)));
+  R.file('Findings.xlsx', await buildTableXLSX('Findings', ...findingsTable(c), [8, 9, 28, 45, 12, 9, 40, 9, 32, 16, 45]));
+};
 async function buildCompXLSX(c) {
   const s = c.s, list = samplesOf(s, 'comp');
   const x = v => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -1179,16 +1229,9 @@ async function buildZip(idx = 0) {
       for (const l of leaves(s)) R.folder(leafPath(l)); // vollständige Ordnerstruktur, auch leere
       R.folder(FINDINGS_DIR);
       const fs = [...c.findings].sort((a, b) => a.num - b.num);
-      const head = ['Finding', 'Item', 'Item Title', 'Description (Physical)', 'WO No.', 'Rectified', 'Rectification', 'No. of Photos', 'Folder', 'Created', 'WO Wording (manual)'];
-      const rows = fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'yes' : 'no', f.rect,
-        c.photos.filter(p => p.findingId === f.id).length, FINDINGS_DIR + '/' + findingFolder(f), fmtDT(f.createdAt), '']);
-      const sHead = ['Sample', 'Type', 'Name', 'Pre-selected', 'Origin Item', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'No. of Photos', 'Created'];
-      const sRows = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [smNo(x), SAMPLE_KINDS[x.kind].label, x.name || '', x.pre ? 'yes' : '', smOrigin(s, x),
-        x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)]);
       if (samplesOf(s, 'comp').length) R.file(compXlsxName(s), await buildCompXLSX(c));
-      R.file('Samples.csv', '﻿' + [sHead, ...sRows].map(r => r.map(csvCell).join(';')).join('\r\n'));
+      await tableFiles(R, c);
       if (c.findings.length) { busy('Creating finding report …'); R.file(reportName(s), await buildReportPDF(c)); }
-      R.file('Findings.csv', '﻿' + [head, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n'));
       R.file('Pruefprotokoll.html', protocolHTML(c, X.names, X.annNames));
       R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, exportedAt: X.builtAt, parts: X.parts.length, session: s, findings: fs,
         photos: X.photos.map(p => ({ id: p.id, itemId: p.itemId, findingId: p.findingId, sampleId: p.sampleId || null, createdAt: p.createdAt, note: p.note, file: X.names.get(p.id), annotatedFile: X.annNames.get(p.id) || null })) }, null, 1));
@@ -1237,9 +1280,8 @@ async function exportTemplate() {
     for (const l of L) R.folder(leafPath(l));
     R.folder(FINDINGS_DIR + '/' + findingFolder(f));
     R.file(compXlsxName(s), await buildCompXLSX(c));
-    R.file('Samples.csv', '\ufeff' + [['Sample', 'Type', 'Name', 'P/N', 'S/N', 'Description'], [smNo(s.samples[0]), 'Component', 'Example component', 'P/N', 'S/N', 'Example sample (placeholder)']].map(r => r.map(csvCell).join(';')).join('\r\n'));
+    await tableFiles(R, c);
     R.file(reportName(s), await buildReportPDF(c));
-    R.file('Findings.csv', '\ufeff' + [['Finding', 'Item', 'Description (Physical)', 'WO No.', 'Folder'], [fNo(f), f.itemId, f.text, f.wo, FINDINGS_DIR + '/' + findingFolder(f)]].map(r => r.map(csvCell).join(';')).join('\r\n'));
     R.file('Pruefprotokoll.html', protocolHTML(c, new Map(), new Map()));
     R.file('session.json', JSON.stringify({ app: 'ARC Physical Helper', version: APP_VERSION, template: true, session: s, findings: [f], photos: [] }, null, 1));
     const blob = await zip.generateAsync({ type: 'blob' }), name = root + '.zip';
