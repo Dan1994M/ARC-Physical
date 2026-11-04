@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.12.1';
+const APP_VERSION = '0.13.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -114,7 +114,8 @@ const EEL_AREAS = [['4.1.1', 'Cockpit'], ['4.1.2', 'Cabin']]; // EEL-Samples hä
 const PRE_ONLY = ['eel', 'mod']; // nur über Preparation bzw. 4.1 / 6.4 anlegbar
 // Sitzgruppen je Typ (aus Feld „Type“ des Physicals); Fallback Narrowbody
 const lopaSides = type => /A?33\d/i.test(type || '') ? ['AC', 'DEFG', 'HK'] : ['ABC', 'DEF'];
-const smNo = sm => 'S' + pad(sm.num);
+// Sample-Nr. mit Prüflisten-Bezug, z. B. 6.1.3 (EEL: 4.1.1.x / 4.1.2.x)
+const smNo = sm => `${sm.kind === 'eel' ? sm.area || SAMPLE_KINDS.eel.item : SAMPLE_KINDS[sm.kind]?.item || ''}.${sm.num}`;
 const samplesOf = (s, kind) => (s.samples || []).filter(x => x.kind === kind).sort((a, b) => a.num - b.num);
 function smOrigin(s, sm) { const l = sm.origin && leafById(s, sm.origin); return l ? `${l.id} ${l.title}` : sm.pre ? 'Pre-selected' : ''; }
 function smLabel(s, sm) {
@@ -123,7 +124,7 @@ function smLabel(s, sm) {
 }
 function smFile(s, sm) {
   const k = SAMPLE_KINDS[sm.kind], o = sm.origin && leafById(s, sm.origin);
-  const parts = [`${sm.kind === 'eel' ? sm.area || k.item : k.item} ${smNo(sm)}`];
+  const parts = [smNo(sm)];
   if (sm.name) parts.push(sm.name.slice(0, 40));
   if (sm.kind === 'lopa') parts.push(`Row ${sm.row || 'X'} ${sm.side || ''}`.trim());
   else if (o && !o.samples) parts.push(o.folder);
@@ -387,7 +388,7 @@ async function addPhotos(files, ctx) {
   render();
   const n = c.photos.filter(p => p.itemId === ctx.item).length;
   if (ctx.smEdit) { const sm = c.s.samples.find(x => x.id === ctx.sample); if (sm) return smDetailSheet(sm); }
-  toast(`${added.length > 1 ? added.length + ' photos' : 'Photo'} saved · ${ctx.sample ? ctx.item + ' ' + smNo(c.s.samples.find(x => x.id === ctx.sample) || { num: 0 }) : ctx.doc || ctx.item} (${ctx.sample ? c.photos.filter(p => p.sampleId === ctx.sample).length : ctx.doc ? c.photos.filter(p => p.docId === ctx.doc).length : n})`, 'Undo', () => deletePhotos(added));
+  toast(`${added.length > 1 ? added.length + ' photos' : 'Photo'} saved · ${ctx.sample ? smNo(c.s.samples.find(x => x.id === ctx.sample) || { num: 0 }) : ctx.doc || ctx.item} (${ctx.sample ? c.photos.filter(p => p.sampleId === ctx.sample).length : ctx.doc ? c.photos.filter(p => p.docId === ctx.doc).length : n})`, 'Undo', () => deletePhotos(added));
 }
 async function deletePhotos(list) {
   const c = cur; if (!c) return;
@@ -517,7 +518,7 @@ function viewItem(c, id) {
       if (l.id === SAMPLE_KINDS.eel.item && EEL_AREAS.some(([v]) => v === d.id)) {
         for (const sm of samplesOf(c.s, 'eel').filter(x => (x.area || '4.1.1') === d.id)) {
           const sp = c.photos.filter(p => p.sampleId === sm.id);
-          h += `<div class="card pad pre-sm"><div class="sm-h"><b>${d.id} ${smNo(sm)}</b>${sm.pre ? '<span class="pre-b">PRE</span>' : ''}<span class="mut grow">EEL sample</span><button class="link bad" data-act="smDel" data-sid="${sm.id}">Delete</button></div>
+          h += `<div class="card pad pre-sm"><div class="sm-h"><b>${smNo(sm)}</b>${sm.pre ? '<span class="pre-b">PRE</span>' : ''}<span class="mut grow">EEL sample</span><button class="link bad" data-act="smDel" data-sid="${sm.id}">Delete</button></div>
           ${smFields(sm, [])}${photoGrid(sp, 'sm:' + sm.id)}
           <button class="btn" data-act="cam" data-item="${l.id}" data-sample="${sm.id}">📷 Photo</button>
           <button class="link" data-act="library" data-item="${l.id}" data-sample="${sm.id}">From library</button></div>`;
@@ -543,7 +544,7 @@ function viewItem(c, id) {
   } else h += `<div class="card pad"><div class="lbl">Photos <span class="mut">${e.n}${e.min ? ` / min. ${e.min}` : ''}</span></div>${photoGrid(ph, 'item:' + l.id)}
   <button class="link" data-act="library" data-item="${l.id}">Add from library</button></div>`;
   const here = (c.s.samples || []).filter(x => x.origin === l.id && !l.samples).sort((a, b) => a.kind.localeCompare(b.kind) || a.num - b.num);
-  if (here.length) h += `<div class="card pad"><div class="lbl">Samples taken here</div>${here.map(x => `<a class="iss-i" href="#/s/${c.s.id}/i/${SAMPLE_KINDS[x.kind].item}">${SAMPLE_KINDS[x.kind].item} ${smNo(x)} · ${esc(SAMPLE_KINDS[x.kind].label)}${x.pn ? ' · P/N ' + esc(x.pn) : ''}${x.row ? ' · Row ' + esc(x.row) + ' ' + esc(x.side) : ''} · 📷 ${c.photos.filter(p => p.sampleId === x.id).length} ›</a>`).join('')}</div>`;
+  if (here.length) h += `<div class="card pad"><div class="lbl">Samples taken here</div>${here.map(x => `<a class="iss-i" href="#/s/${c.s.id}/i/${SAMPLE_KINDS[x.kind].item}">${smNo(x)} · ${esc(SAMPLE_KINDS[x.kind].label)}${x.pn ? ' · P/N ' + esc(x.pn) : ''}${x.row ? ' · Row ' + esc(x.row) + ' ' + esc(x.side) : ''} · 📷 ${c.photos.filter(p => p.sampleId === x.id).length} ›</a>`).join('')}</div>`;
   h += `<div class="card pad"><div class="lbl">Findings</div>${e.fnd.length ? e.fnd.map(f => findingMini(c, f)).join('') : '<div class="mut sm">None</div>'}
   <button class="link" data-act="newFindingNoPhoto" data-item="${l.id}">Create finding without photo</button></div>`;
   h += `<div class="card pad"><div class="lbl">Note</div><textarea class="inp" rows="2" data-field="itemNote" data-id="${l.id}" placeholder="optional">${esc(st.note)}</textarea></div>`;
@@ -582,7 +583,7 @@ function viewPrep(c) {
     h += `<label class="chk prep"><input type="checkbox" data-field="prep" data-id="${x.id}" ${d[x.id] ? 'checked' : ''}> <span>${esc(x.text)}${x.optional ? ' <span class="mut">(optional)</span>' : ''}</span></label>`;
     if (!x.kind || !d[x.id]) continue;
     const k = SAMPLE_KINDS[x.kind], list = samplesOf(s, x.kind).filter(sm => sm.pre);
-    for (const sm of list) h += `<div class="pre-sm"><div class="sm-h"><b>${k.item} ${smNo(sm)}</b><span class="mut grow">📷 ${c.photos.filter(p => p.sampleId === sm.id).length}</span><button class="link bad" data-act="smDel" data-sid="${sm.id}">Delete</button></div>${smFields(sm, lopaSides(s.type))}</div>`;
+    for (const sm of list) h += `<div class="pre-sm"><div class="sm-h"><b>${smNo(sm)}</b><span class="mut grow">📷 ${c.photos.filter(p => p.sampleId === sm.id).length}</span><button class="link bad" data-act="smDel" data-sid="${sm.id}">Delete</button></div>${smFields(sm, lopaSides(s.type))}</div>`;
     h += `<button class="btn block pre-add" data-act="smPre" data-kind="${x.kind}">＋ Add ${esc(k.label)} sample → ${k.item}</button>`;
   }
   h += `<label class="lbl" style="margin-top:14px;display:block">Notes</label><textarea class="inp" rows="3" data-field="prepNote" placeholder="e.g. pre-selected samples, open questions">${esc(s.prepNote || '')}</textarea></div>`;
@@ -733,7 +734,7 @@ function sampleSheet() {
   <button class="link" data-act="smCreate" data-src="lib">Save & choose from library</button>`);
 }
 function smDetailSheet(sm) {
-  openSheet(`<h2>${SAMPLE_KINDS[sm.kind].item} ${smNo(sm)} · ${esc(SAMPLE_KINDS[sm.kind].label)}</h2>${sm.origin ? `<div class="mut sm">Origin: ${esc(smOrigin(cur.s, sm))}</div>` : ''}
+  openSheet(`<h2>${smNo(sm)} · ${esc(SAMPLE_KINDS[sm.kind].label)}</h2>${sm.origin ? `<div class="mut sm">Origin: ${esc(smOrigin(cur.s, sm))}</div>` : ''}
   ${smFields(sm, lopaSides(cur.s.type))}
   <div class="row2"><button class="btn pri" data-act="smDone">Done</button></div>`);
   setTimeout(() => $('#sheet [data-field="sm_pn"]')?.focus(), 50);
@@ -942,7 +943,7 @@ const encPath = p => p.split('/').map(encodeURIComponent).join('/');
 function smTable(c) {
   const all = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(c.s, k));
   return `<h2>Samples</h2>${all.length ? `<table><tr><th>No.</th><th>Type</th><th>Name</th><th>Origin</th><th>P/N</th><th>S/N</th><th>Row / Seats</th><th>Description</th><th>Photos</th></tr>${all.map(x =>
-    `<tr><td>${SAMPLE_KINDS[x.kind].item} ${smNo(x)}</td><td>${esc(SAMPLE_KINDS[x.kind].label)}</td><td>${esc(x.name)}</td><td>${esc(smOrigin(c.s, x))}</td><td>${esc(x.pn)}</td><td>${esc(x.sn)}</td><td>${x.row ? esc(x.row + ' ' + x.side) : ''}</td><td>${esc(x.desc)}</td><td>${c.photos.filter(p => p.sampleId === x.id).length}</td></tr>`).join('')}</table>` : '<p>No samples.</p>'}`;
+    `<tr><td>${smNo(x)}</td><td>${esc(SAMPLE_KINDS[x.kind].label)}</td><td>${esc(x.name)}</td><td>${esc(smOrigin(c.s, x))}</td><td>${esc(x.pn)}</td><td>${esc(x.sn)}</td><td>${x.row ? esc(x.row + ' ' + x.side) : ''}</td><td>${esc(x.desc)}</td><td>${c.photos.filter(p => p.sampleId === x.id).length}</td></tr>`).join('')}</table>` : '<p>No samples.</p>'}`;
 }
 /* ---------------- Finding Report (PDF) ---------------- */
 // Fotos im Report: explizit markierte, sonst das erste Foto des Findings
@@ -968,7 +969,7 @@ async function buildCompXLSX(c) {
   rows.push(`<row r="4" ht="20" customHeight="1">${H.map((h, i) => str('ABCDEFG'[i] + 4, h, 5)).join('')}</row>`);
   list.forEach((sm, i) => {
     const r = i + 5;
-    rows.push(`<row r="${r}">${str('A' + r, '6.1.' + sm.num, 6)}${str('B' + r, [sm.name, sm.desc].filter(Boolean).join(' – '), 6)}${str('C' + r, sm.pn, 6)}${str('D' + r, sm.sn, 6)}${box('E' + r)}${box('F' + r)}${str('G' + r, '', 6)}</row>`);
+    rows.push(`<row r="${r}">${str('A' + r, smNo(sm), 6)}${str('B' + r, [sm.name, sm.desc].filter(Boolean).join(' – '), 6)}${str('C' + r, sm.pn, 6)}${str('D' + r, sm.sn, 6)}${box('E' + r)}${box('F' + r)}${str('G' + r, '', 6)}</row>`);
   });
   const last = Math.max(4, list.length + 4);
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1168,7 +1169,7 @@ async function buildZip(idx = 0) {
       const rows = fs.map(f => [fNo(f), f.itemId, leafById(s, f.itemId)?.title || '', f.text, f.wo, f.rectified ? 'yes' : 'no', f.rect,
         c.photos.filter(p => p.findingId === f.id).length, 'Findings/' + findingFolder(f), fmtDT(f.createdAt), '']);
       const sHead = ['Sample', 'Type', 'Name', 'Pre-selected', 'Origin Item', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'No. of Photos', 'Created'];
-      const sRows = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [`${SAMPLE_KINDS[x.kind].item} ${smNo(x)}`, SAMPLE_KINDS[x.kind].label, x.name || '', x.pre ? 'yes' : '', smOrigin(s, x),
+      const sRows = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [smNo(x), SAMPLE_KINDS[x.kind].label, x.name || '', x.pre ? 'yes' : '', smOrigin(s, x),
         x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)]);
       if (samplesOf(s, 'comp').length) R.file(compXlsxName(s), await buildCompXLSX(c));
       R.file('Samples.csv', '﻿' + [sHead, ...sRows].map(r => r.map(csvCell).join(';')).join('\r\n'));
@@ -1257,7 +1258,7 @@ document.addEventListener('click', async e => {
       }
       case 'smDel': {
         const sm = c.s.samples.find(x => x.id === d.sid), sp = c.photos.filter(p => p.sampleId === sm.id);
-        if (!confirm(`Delete ${SAMPLE_KINDS[sm.kind].item} ${smNo(sm)}${sp.length ? ` incl. ${sp.length} photo(s)` : ''}?`)) break;
+        if (!confirm(`Delete ${smNo(sm)}${sp.length ? ` incl. ${sp.length} photo(s)` : ''}?`)) break;
         c.s.samples = c.s.samples.filter(x => x !== sm);
         if (sp.length) await deletePhotos(sp); else { await touch(); render(); }
         break;
