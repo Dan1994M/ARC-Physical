@@ -1,4 +1,4 @@
-# ARC Physical Helper – v0.15.2
+# ARC Physical Helper – v0.15.3
 
 Offline-PWA zur Durchführung und Nachbereitung des ARC Physical Survey. Alle Daten bleiben lokal auf dem Gerät (IndexedDB).
 
