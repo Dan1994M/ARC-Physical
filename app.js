@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.16.0';
+const APP_VERSION = '0.17.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -64,6 +64,29 @@ const CHECKLIST = [
    Werden immer aus dieser aktuellen Liste gelesen (nicht aus der
    Session-Kopie) -> Änderungen wirken auch in laufenden Physicals.
    Einfach Zeilen ergänzen/ändern; Key = Prüfpunkt-ID. */
+/* Radzählung (Blick in Flugrichtung) je Typfamilie + Skizze für 5.4.x */
+const gearFam = type => /33\d/.test(type || '') ? 'a330' : /3[12]\d/.test(type || '') ? 'a320' : null;
+const WHEELS = {
+  a320: { label: 'A320 family', nlg: [1, 2], lh: [[1, 2]], rh: [[3, 4]] },
+  a330: { label: 'A330', nlg: [1, 2], lh: [[1, 2], [5, 6]], rh: [[3, 4], [7, 8]] },
+};
+const GEAR_ITEMS = { '5.4.1': 'nlg', '5.4.2': 'lh', '5.4.3': 'rh' };
+function wheelText(fam, g) {
+  const w = WHEELS[fam];
+  if (g === 'nlg') return 'Wheel numbering NLG: 1 = LH, 2 = RH (looking forward)';
+  const rows = w[g], dir = g === 'lh' ? 'outbd → inbd' : 'inbd → outbd';
+  return `Wheel numbering ${g === 'lh' ? 'LH' : 'RH'} MLG: ` + (rows.length > 1 ? `${rows[0].join(', ')} (fwd) · ${rows[1].join(', ')} (aft)` : rows[0].join(', ')) + `, ${dir} (looking forward)`;
+}
+function wheelSVG(fam, g) {
+  const w = WHEELS[fam], W = 220, r = 12, rowsN = w.lh.length, H = 120 + rowsN * 32;
+  const c = (x, y, n, on) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${on ? 'var(--acc)' : 'none'}" stroke="${on ? 'var(--acc)' : 'var(--mut)'}" stroke-width="1.5"/><text x="${x}" y="${y + 4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="${on ? 'var(--accfg)' : 'var(--mut)'}">${n}</text>`;
+  let o = `<line x1="${W / 2}" y1="30" x2="${W / 2}" y2="${H - 16}" stroke="var(--line)" stroke-width="10" stroke-linecap="round"/>`;
+  o += `<path d="M${W / 2} 4 l-7 11 h14z" fill="var(--mut)"/><text x="${W / 2 + 12}" y="14" font-size="11" fill="var(--mut)">FWD</text>`;
+  o += c(W / 2 - 15, 46, w.nlg[0], g === 'nlg') + c(W / 2 + 15, 46, w.nlg[1], g === 'nlg');
+  w.lh.forEach((row, i) => { const y = 100 + i * 32; o += c(30, y, row[0], g === 'lh') + c(60, y, row[1], g === 'lh') + c(W - 60, y, w.rh[i][0], g === 'rh') + c(W - 30, y, w.rh[i][1], g === 'rh'); });
+  o += `<text x="45" y="${H - 4}" text-anchor="middle" font-size="11" fill="var(--mut)">LH</text><text x="${W - 45}" y="${H - 4}" text-anchor="middle" font-size="11" fill="var(--mut)">RH</text>`;
+  return `<figure class="wheels"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(w.label)} wheel numbering">${o}</svg><figcaption class="mut sm">${esc(w.label)}</figcaption></figure>`;
+}
 const HINTS = {
   '4.2': [
     'Windshields & Side Windows – delamination, scratches, cracks, heating',
@@ -513,8 +536,10 @@ function viewItem(c, id) {
   ${st.status === 'na' ? `<div class="lbl">N/A reason</div><input class="inp" data-field="naReason" data-id="${l.id}" value="${esc(st.reason)}" placeholder="Required">` : ''}
   ${e.state === 'warn' ? `<div class="hint">${st.status === 'ok' ? (l.docs ? `Missing documents: ${e.miss.map(d => d.name).join(', ')}` : l.samples ? 'At least 1 sample with photo required' : `Required photo missing (${e.n} / ${e.min})`) : 'N/A reason missing'}</div>` : ''}</div>`;
   // Hinweise des Prüfpunkts, sonst vom nächsten Elternknoten (z. B. 5.3 -> 5.3.1/5.3.2/5.3.3)
-  const hi = [l, ...[...(l.parents || [])].reverse()].map(n => HINTS[n.id]).find(Boolean);
-  if (hi?.length) h += `<details class="card pad hints"><summary class="lbl">What to look for</summary><ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>`;
+  const hi = [l, ...[...(l.parents || [])].reverse()].map(n => HINTS[n.id]).find(Boolean) || [];
+  const g = GEAR_ITEMS[l.id], fam = gearFam(c.s.type), fams = g ? (fam ? [fam] : Object.keys(WHEELS)) : [];
+  const wh = fams.map(f => `<div class="wh">${wheelSVG(f, g)}<div class="sm">${esc(wheelText(f, g))}</div></div>`).join('');
+  if (hi.length || wh) h += `<details class="card pad hints" ${wh ? 'open' : ''}><summary class="lbl">What to look for</summary>${wh}${hi.length ? `<ul>${hi.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</details>`;
   const supK = l.samples || (l.id === SAMPLE_KINDS.eel.item ? 'eel' : null);
   if (supK) h += `<div class="card pad">${supportBox(c, supK)}</div>`;
   const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated);
