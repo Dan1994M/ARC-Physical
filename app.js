@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.17.1';
+const APP_VERSION = '0.18.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -1021,23 +1021,36 @@ const inReport = p => reportPhotos(cur, p.findingId).includes(p);
    Layout wie Finding Report: Reg fett groß, Titel, Unterzeile, graue Kopfzeile.
    Tickboxen = native Excel-365-Kontrollkästchen (Zellformat); ältere Excel-Versionen zeigen FALSCH/WAHR. */
 const compXlsxName = s => safeName(`${s.reg}_Component Samples_${todayYMD()}.xlsx`);
+/* Excel-Tabelle (ListObject), damit in Excel Zeilen ergänzt werden können (Format + Filter wachsen mit). */
+const XL_TABLE_CT = '<Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>';
+function addXlTable(z, name, ref, head) {
+  const esc2 = v => String(v).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  z.file('xl/tables/table1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1" name="${name}" displayName="${name}" ref="${ref}" totalsRowShown="0"><autoFilter ref="${ref}"/>
+<tableColumns count="${head.length}">${head.map((h, i) => `<tableColumn id="${i + 1}" name="${esc2(h)}"/>`).join('')}</tableColumns>
+<tableStyleInfo name="TableStyleLight1" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>`);
+  z.file('xl/worksheets/_rels/sheet1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/></Relationships>`);
+}
 /* Einfache Tabellen-XLSX (Findings / Samples): Kopfzeile fett, Filter, fixiert; Text als Textformat (@), damit Excel 5.3 nicht als Datum liest. */
 const xlCol = i => { let r = ''; for (i++; i; i = (i - 1) / 26 | 0) r = String.fromCharCode(65 + (i - 1) % 26) + r; return r; };
 async function buildTableXLSX(sheetName, head, rows, widths = []) {
+  rows = [...rows];
   const x = v => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const cell = (ref, v, st) => typeof v === 'number' ? `<c r="${ref}" s="${st === 1 ? 1 : 3}"><v>${v}</v></c>` : `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  if (!rows.length) rows = [head.map(() => '')];
   const all = [head, ...rows], last = xlCol(head.length - 1) + all.length;
   const sd = all.map((r, i) => `<row r="${i + 1}">${r.map((v, j) => cell(xlCol(j) + (i + 1), v, i ? 2 : 1)).join('')}</row>`).join('');
   const cols = head.map((h, j) => `<col min="${j + 1}" max="${j + 1}" width="${widths[j] || Math.min(50, Math.max(10, h.length + 2, ...rows.map(r => String(r[j] ?? '').length + 2)))}" customWidth="1"/>`).join('');
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
-<cols>${cols}</cols><sheetData>${sd}</sheetData><autoFilter ref="A1:${last}"/><pageSetup orientation="landscape" fitToHeight="0"/></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<cols>${cols}</cols><sheetData>${sd}</sheetData><pageSetup orientation="landscape" fitToHeight="0"/><tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`;
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>
 <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/></patternFill></fill></fills>
 <borders count="2"><border/><border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom></border></borders>
 <cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="4"><xf/>
-<xf numFmtId="49" fontId="1" fillId="2" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="49" fontId="1" borderId="1" applyNumberFormat="1" applyFont="1" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>
 <xf numFmtId="49" borderId="1" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
 <xf numFmtId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf></cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
@@ -1046,16 +1059,17 @@ async function buildTableXLSX(sheetName, head, rows, widths = []) {
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
 <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${XL_TABLE_CT}</Types>`);
   z.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
   z.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${nm}" sheetId="1" r:id="rId1"/></sheets>
-<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${nm}'!$A$1:$${last.replace(/(\d+)$/, '$$$1')}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">'${nm}'!$1:$1</definedName></definedNames></workbook>`);
+<definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">'${nm}'!$1:$1</definedName></definedNames></workbook>`);
   z.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
   z.file('xl/worksheets/sheet1.xml', sheet);
   z.file('xl/styles.xml', styles);
+  addXlTable(z, sheetName.replace(/\W/g, ''), 'A1:' + last, head);
   return z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 function findingsTable(c) {
@@ -1066,8 +1080,8 @@ function findingsTable(c) {
 }
 function samplesTable(c) {
   const s = c.s;
-  return [['Sample', 'Name', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'Created'],
-    Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [smNo(x), x.name || '',
+  return [['Sample', 'Type', 'Name', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'Created'],
+    Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [smNo(x), SAMPLE_KINDS[x.kind].label, x.name || '',
       x.pn, x.sn, x.row, x.side, x.desc, fmtDT(x.createdAt)])];
 }
 const tableFiles = async (R, c) => {
@@ -1089,7 +1103,8 @@ async function buildCompXLSX(c) {
     const r = i + 5;
     rows.push(`<row r="${r}">${str('A' + r, smNo(sm), 6)}${str('B' + r, [sm.name, sm.desc].filter(Boolean).join(' – '), 6)}${str('C' + r, sm.pn, 6)}${str('D' + r, sm.sn, 6)}${box('E' + r)}${box('F' + r)}${str('G' + r, '', 6)}</row>`);
   });
-  const last = Math.max(4, list.length + 4);
+  if (!list.length) rows.push(`<row r="5">${'ABCD'.split('').map(cl => str(cl + 5, '', 6)).join('')}${box('E5')}${box('F5')}${str('G5', '', 6)}</row>`);
+  const last = Math.max(5, list.length + 4);
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:G${last}"/>
@@ -1101,6 +1116,7 @@ async function buildCompXLSX(c) {
 <pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/>
 <pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>
 <headerFooter><oddFooter>&amp;L${x(s.reg)} · Component Samples&amp;RPage &amp;P / &amp;N</oddFooter></headerFooter>
+<tableParts count="1"><tablePart r:id="rId1"/></tableParts>
 </worksheet>`;
   const font = (sz, b) => `<font>${b ? '<b/>' : ''}<sz val="${sz}"/><name val="Arial"/><family val="2"/></font>`;
   const bd = '<border><left style="thin"><color rgb="FFAAAAAA"/></left><right style="thin"><color rgb="FFAAAAAA"/></right><top style="thin"><color rgb="FFAAAAAA"/></top><bottom style="thin"><color rgb="FFAAAAAA"/></bottom><diagonal/></border>';
@@ -1130,7 +1146,7 @@ async function buildCompXLSX(c) {
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
 <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
 <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-<Override PartName="/xl/featurePropertyBag/featurePropertyBag.xml" ContentType="application/vnd.ms-excel.featurepropertybag+xml"/></Types>`);
+<Override PartName="/xl/featurePropertyBag/featurePropertyBag.xml" ContentType="application/vnd.ms-excel.featurepropertybag+xml"/>${XL_TABLE_CT}</Types>`);
   z.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
   z.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1141,6 +1157,7 @@ async function buildCompXLSX(c) {
   z.file('xl/worksheets/sheet1.xml', sheet);
   z.file('xl/styles.xml', styles);
   z.file('xl/featurePropertyBag/featurePropertyBag.xml', fpb);
+  addXlTable(z, 'ComponentSamples', 'A4:G' + last, H);
   return z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 
