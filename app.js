@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.13.1';
+const APP_VERSION = '0.13.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -115,6 +115,13 @@ const PRE_ONLY = ['eel', 'mod']; // nur über Preparation bzw. 4.1 / 6.4 anlegba
 // Sitzgruppen je Typ (aus Feld „Type“ des Physicals); Fallback Narrowbody
 const lopaSides = type => /A?33\d/i.test(type || '') ? ['AC', 'DEFG', 'HK'] : ['ABC', 'DEF'];
 // Sample-Nr. mit Prüflisten-Bezug, z. B. 6.1.03 (EEL: 4.1.1.xx / 4.1.2.x)
+// Zählkreis je Art, EEL getrennt nach Bereich (4.1.1 / 4.1.2); nie wiederverwenden, auch nach Löschen
+const smKey = (kind, area) => kind === 'eel' ? 'eel:' + (area || '4.1.1') : kind;
+function nextSmNum(s, kind, area) {
+  const k = smKey(kind, area), sq = s.sampleSeq ||= {};
+  const used = (s.samples || []).filter(x => smKey(x.kind, x.area) === k).reduce((m, x) => Math.max(m, x.num || 0), 0);
+  return sq[k] = Math.max(sq[k] || 0, used) + 1;
+}
 const smNo = sm => `${sm.kind === 'eel' ? sm.area || SAMPLE_KINDS.eel.item : SAMPLE_KINDS[sm.kind]?.item || ''}.${pad(sm.num)}`;
 const samplesOf = (s, kind) => (s.samples || []).filter(x => x.kind === kind).sort((a, b) => a.num - b.num);
 function smOrigin(s, sm) { const l = sm.origin && leafById(s, sm.origin); return l ? `${l.id} ${l.title}` : sm.pre ? 'Pre-selected' : ''; }
@@ -1237,8 +1244,8 @@ document.addEventListener('click', async e => {
       case 'editSession': sessionSheet(c.s); break;
       case 'smNew': smDraft = { kind: d.kind || defaultKind(d.origin), origin: d.kind ? null : d.origin, fixed: !!d.kind }; sampleSheet(); break;
       case 'smPre': { // Vorausgewähltes Sample ohne Foto anlegen (Preparation)
-        const sq = c.s.sampleSeq ||= {}; sq[d.kind] = (sq[d.kind] || 0) + 1;
-        (c.s.samples ||= []).push({ id: uid(), kind: d.kind, origin: null, name: '', pn: '', sn: '', row: '', side: d.kind === 'lopa' ? lopaSides(c.s.type)[0] : '', area: d.kind === 'eel' ? d.area || '4.1.1' : '', pre: !d.area, desc: '', num: sq[d.kind], createdAt: nowISO() });
+        const area = d.kind === 'eel' ? d.area || '4.1.1' : '', num = nextSmNum(c.s, d.kind, area);
+        (c.s.samples ||= []).push({ id: uid(), kind: d.kind, origin: null, name: '', pn: '', sn: '', row: '', side: d.kind === 'lopa' ? lopaSides(c.s.type)[0] : '', area, pre: !d.area, desc: '', num, createdAt: nowISO() });
         await touch(); render(); setTimeout(() => [...document.querySelectorAll('.pre-sm input')].filter(e => !e.value).pop()?.focus(), 50); break;
       }
       case 'smDone': closeSheet(); await flush(); render(); break;
@@ -1247,10 +1254,9 @@ document.addEventListener('click', async e => {
         smReadSheet();
         if (smDraft.kind === 'lopa' && !smDraft.row) { toast('Row missing'); break; }
         if (PRE_ONLY.includes(smDraft.kind) && !smDraft.name) { toast('Name missing'); break; }
-        const sq = c.s.sampleSeq ||= {}; sq[smDraft.kind] = (sq[smDraft.kind] || 0) + 1;
         const { fixed, ...base } = smDraft;
         const sm = { id: uid(), ...base, name: base.name || '', pn: ['comp', 'eel'].includes(base.kind) ? base.pn || '' : '', sn: ['comp', 'eel'].includes(base.kind) ? base.sn || '' : '',
-          row: base.kind === 'lopa' ? base.row : '', side: base.kind === 'lopa' ? base.side : '', desc: base.desc || '', num: sq[smDraft.kind], createdAt: nowISO() };
+          row: base.kind === 'lopa' ? base.row : '', side: base.kind === 'lopa' ? base.side : '', desc: base.desc || '', num: nextSmNum(c.s, base.kind, base.area), createdAt: nowISO() };
         (c.s.samples ||= []).push(sm);
         capture = { item: SAMPLE_KINDS[sm.kind].item, sample: sm.id, smEdit: sm.kind === 'comp', doc: null, fid: null, newFinding: false };
         $(d.src === 'lib' ? '#libIn' : '#camIn').click();
@@ -1348,7 +1354,10 @@ async function onField(el, commit) {
       await savePhotoMetas(ph); await put('findings', fi); await touch(); render(); toast(`${fNo(fi)} moved to ${v}`);
     } break;
     case 'sm_area': case 'sm_name': case 'sm_pn': case 'sm_sn': case 'sm_desc': case 'sm_row': case 'sm_side': {
-      const sm = c.s.samples.find(x => x.id === el.dataset.sid); sm[f.slice(3)] = typeof v === 'string' ? v.trim() : v; sessDirty = true; schedule(); break;
+      const sm = c.s.samples.find(x => x.id === el.dataset.sid), k = f.slice(3), val = typeof v === 'string' ? v.trim() : v;
+      if (k === 'area' && sm.kind === 'eel') { if (!commit || val === (sm.area || '4.1.1')) break; const sq = c.s.sampleSeq ||= {}, ok = smKey('eel', sm.area); if (sq[ok] === sm.num) sq[ok]--; // frei gewordene letzte Nr. zurückgeben
+        sm.num = nextSmNum(c.s, 'eel', val); sm.area = val; await touch(); render(); break; } // neuer Bereich -> neue Nr.
+      sm[k] = val; sessDirty = true; schedule(); break;
     }
     case 'vReport': if (commit) {
       const p = c.photos.find(x => x.id === viewer.pid), fp = c.photos.filter(x => x.findingId === p.findingId);
