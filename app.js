@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.15.1';
+const APP_VERSION = '0.15.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -952,8 +952,8 @@ const encPath = p => p.split('/').map(encodeURIComponent).join('/');
 
 function smTable(c) {
   const all = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(c.s, k));
-  return `<h2>Samples</h2>${all.length ? `<table><tr><th>No.</th><th>Type</th><th>Name</th><th>Origin</th><th>P/N</th><th>S/N</th><th>Row / Seats</th><th>Description</th><th>Photos</th></tr>${all.map(x =>
-    `<tr><td>${smNo(x)}</td><td>${esc(SAMPLE_KINDS[x.kind].label)}</td><td>${esc(x.name)}</td><td>${esc(smOrigin(c.s, x))}</td><td>${esc(x.pn)}</td><td>${esc(x.sn)}</td><td>${x.row ? esc(x.row + ' ' + x.side) : ''}</td><td>${esc(x.desc)}</td><td>${c.photos.filter(p => p.sampleId === x.id).length}</td></tr>`).join('')}</table>` : '<p>No samples.</p>'}`;
+  return `<h2>Samples</h2>${all.length ? `<table><tr><th>No.</th><th>Type</th><th>Name</th><th>Origin</th><th>P/N</th><th>S/N</th><th>Row / Seats</th><th>Description</th></tr>${all.map(x =>
+    `<tr><td>${smNo(x)}</td><td>${esc(SAMPLE_KINDS[x.kind].label)}</td><td>${esc(x.name)}</td><td>${esc(smOrigin(c.s, x))}</td><td>${esc(x.pn)}</td><td>${esc(x.sn)}</td><td>${x.row ? esc(x.row + ' ' + x.side) : ''}</td><td>${esc(x.desc)}</td></tr>`).join('')}</table>` : '<p>No samples.</p>'}`;
 }
 /* ---------------- Finding Report (PDF) ---------------- */
 // Fotos im Report: explizit markierte, sonst das erste Foto des Findings
@@ -1159,10 +1159,10 @@ function protocolHTML(c, names, annNames) {
   const rows = L.map(l => {
     const e = evalItem(c, l);
     const rem = [e.st.status === 'na' ? 'Reason: ' + (e.st.reason || '—') : '', e.st.note].filter(Boolean).join(' | ');
-    return `<tr class="${e.state}"><td>${esc(l.id)}</td><td>${esc(l.title)}</td><td>${stl[e.st.status]}${e.state === 'warn' ? ' ⚠' : ''}</td><td>${e.n} / ${e.min}</td><td>${e.fnd.map(fNo).join(', ')}</td><td>${esc(rem)}</td><td>${e.st.changedAt ? fmtDT(e.st.changedAt) : ''}</td></tr>`;
+    return `<tr class="${e.state}"><td>${esc(l.id)}</td><td>${esc(l.title)}</td><td>${stl[e.st.status]}${e.state === 'warn' ? ' ⚠' : ''}</td><td>${e.fnd.map(fNo).join(', ')}</td><td>${esc(rem)}</td><td>${e.st.changedAt ? fmtDT(e.st.changedAt) : ''}</td></tr>`;
   }).join('');
   const fs = [...c.findings].sort((a, b) => a.num - b.num);
-  const frows = fs.map(f => `<tr><td>${fNo(f)}</td><td>${esc(f.itemId)}</td><td>${esc(f.text)}</td><td>${esc(f.wo)}</td><td>${f.rectified ? 'yes' : 'no'}</td><td>${esc(f.rect)}</td><td>${c.photos.filter(p => p.findingId === f.id).length}</td></tr>`).join('');
+  const frows = fs.map(f => `<tr><td>${fNo(f)}</td><td>${esc(f.itemId)}</td><td>${esc(f.text)}</td><td>${esc(f.wo)}</td><td>${f.rectified ? 'yes' : 'no'}</td><td>${esc(f.rect)}</td></tr>`).join('');
   const fig = p => `<figure><a href="${encPath(annNames.get(p.id) || names.get(p.id))}"><img src="${encPath(annNames.get(p.id) || names.get(p.id))}" loading="lazy"></a><figcaption>${esc(names.get(p.id).split('/').pop())} · ${fmtDT(p.createdAt)}${p.findingId ? ' · ' + fNo(c.findings.find(f => f.id === p.findingId) || { num: 0 }) : ''}${p.note ? ' · ' + esc(p.note) : ''}</figcaption></figure>`;
   const gal = L.map(l => { const ph = c.photos.filter(p => p.itemId === l.id).sort(byCreated); return ph.length ? `<h3>${esc(l.id)} ${esc(l.title)}</h3><div class="g">${ph.map(fig).join('')}</div>` : ''; }).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inspection Report ${esc(s.reg)} ${esc(fmtDay(s.date))}</title>
@@ -1177,8 +1177,8 @@ table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:4p
 ${s.closeReason ? `<tr><td><b>Reason</b></td><td colspan="3">${esc(s.closeReason)}</td></tr>` : ''}
 <tr><td><b>Open items</b></td><td colspan="3">${iss.count ? `${iss.open.length} open, ${iss.noPhoto.length} without required photo, ${iss.noReason.length} N/A without reason, ${iss.noWO.length} findings without WO` : 'none'}</td></tr>
 <tr><td><b>Export</b></td><td colspan="3">${fmtDT(nowISO())} · ARC Physical Helper ${APP_VERSION}</td></tr></table>
-<h2>Checklist Items</h2><table><tr><th>No.</th><th>Item</th><th>Status</th><th>Photos</th><th>Findings</th><th>Remark</th><th>Assessed</th></tr>${rows}</table>
-<h2>Findings</h2>${fs.length ? `<table><tr><th>No.</th><th>Item</th><th>Description</th><th>WO</th><th>Rectified</th><th>Rectification</th><th>Photos</th></tr>${frows}</table>` : '<p>No findings.</p>'}
+<h2>Checklist Items</h2><table><tr><th>No.</th><th>Item</th><th>Status</th><th>Findings</th><th>Remark</th><th>Assessed</th></tr>${rows}</table>
+<h2>Findings</h2>${fs.length ? `<table><tr><th>No.</th><th>Item</th><th>Description</th><th>WO</th><th>Rectified</th><th>Rectification</th></tr>${frows}</table>` : '<p>No findings.</p>'}
 ${smTable(c)}<h2>Photo Evidence</h2>${gal || '<p>No photos.</p>'}</body></html>`;
 }
 
