@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.11.0';
+const APP_VERSION = '0.12.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -951,6 +951,80 @@ function reportPhotos(c, fid) {
   return sel.length ? sel : ph.slice(0, 1);
 }
 const inReport = p => reportPhotos(cur, p.findingId).includes(p);
+/* ---------------- Component-Sample-Liste (6.1) als Excel ----------------
+   Layout wie Finding Report: Reg fett groß, Titel, Unterzeile, graue Kopfzeile.
+   Tickboxen = native Excel-365-Kontrollkästchen (Zellformat); ältere Excel-Versionen zeigen FALSCH/WAHR. */
+const compXlsxName = s => safeName(`${s.reg}_Component Samples_${todayYMD()}.xlsx`);
+async function buildCompXLSX(c) {
+  const s = c.s, list = samplesOf(s, 'comp');
+  const x = v => String(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const str = (ref, v, st) => `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  const box = (ref) => `<c r="${ref}" s="7" t="b"><v>0</v></c>`;
+  const H = ['Item', 'Description', 'P/N', 'S/N', 'On A/C?', 'In Equipment List?', 'Remarks'];
+  const rows = [];
+  const run = (t, sz) => `<r><rPr><b/><sz val="${sz}"/><rFont val="Arial"/><family val="2"/></rPr><t xml:space="preserve">${x(t)}</t></r>`;
+  rows.push(`<row r="1" ht="24" customHeight="1"><c r="A1" s="1" t="inlineStr"><is>${run(s.reg + '   ', 15)}${run('Component Samples', 12)}</is></c></row>`);
+  rows.push(`<row r="2" ht="15" customHeight="1">${str('A2', [s.msn && 'MSN ' + s.msn, s.type].filter(Boolean).join(' · '), 3)}${str('G2', 'Date ' + fmtDay(s.date), 4)}</row>`);
+  rows.push(`<row r="4" ht="20" customHeight="1">${H.map((h, i) => str('ABCDEFG'[i] + 4, h, 5)).join('')}</row>`);
+  list.forEach((sm, i) => {
+    const r = i + 5;
+    rows.push(`<row r="${r}">${str('A' + r, smNo(sm), 6)}${str('B' + r, [sm.name, sm.desc].filter(Boolean).join(' – '), 6)}${str('C' + r, sm.pn, 6)}${str('D' + r, sm.sn, 6)}${box('E' + r)}${box('F' + r)}${str('G' + r, '', 6)}</row>`);
+  });
+  const last = Math.max(4, list.length + 4);
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:G${last}"/>
+<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="4" topLeftCell="A5" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="15"/>
+<cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="42" customWidth="1"/><col min="3" max="4" width="22" customWidth="1"/><col min="5" max="5" width="11" customWidth="1"/><col min="6" max="6" width="18" customWidth="1"/><col min="7" max="7" width="42" customWidth="1"/></cols>
+<sheetData>${rows.join('')}</sheetData>
+<mergeCells count="2"><mergeCell ref="A1:F1"/><mergeCell ref="A2:F2"/></mergeCells>
+<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/>
+<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>
+<headerFooter><oddFooter>&amp;L${x(s.reg)} · Component Samples&amp;RPage &amp;P / &amp;N</oddFooter></headerFooter>
+</worksheet>`;
+  const font = (sz, b) => `<font>${b ? '<b/>' : ''}<sz val="${sz}"/><name val="Arial"/><family val="2"/></font>`;
+  const bd = '<border><left style="thin"><color rgb="FFAAAAAA"/></left><right style="thin"><color rgb="FFAAAAAA"/></right><top style="thin"><color rgb="FFAAAAAA"/></top><bottom style="thin"><color rgb="FFAAAAAA"/></bottom><diagonal/></border>';
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:xfpb="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag" mc:Ignorable="xfpb">
+<fonts count="5">${font(10)}${font(15, 1)}${font(12, 1)}${font(9)}${font(9, 1)}</fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEBEEF2"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${bd}</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="8">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+<xf numFmtId="0" fontId="4" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/><extLst><ext uri="{C7286773-470A-42A8-94C5-96B5CB345126}" xmlns:xfpb="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag"><xfpb:xfComplement i="0"/></ext></extLst></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+  const fpb = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<FeaturePropertyBags xmlns="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag"><bag type="Checkbox"/><bag type="XFControls"><bagId k="CellControl">0</bagId></bag><bag type="XFComplement"><bagId k="XFControls">1</bagId></bag><bag type="XFComplements" extRef="XFComplementsMapperExtRef"><a k="MappedFeaturePropertyBags"><bagId>2</bagId></a></bag></FeaturePropertyBags>`;
+  const z = new JSZip();
+  z.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/featurePropertyBag/featurePropertyBag.xml" ContentType="application/vnd.ms-excel.featurepropertybag+xml"/></Types>`);
+  z.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  z.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Component Samples" sheetId="1" r:id="rId1"/></sheets>
+<definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">'Component Samples'!$4:$4</definedName></definedNames></workbook>`);
+  z.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId3" Type="http://schemas.microsoft.com/office/2022/11/relationships/FeaturePropertyBag" Target="featurePropertyBag/featurePropertyBag.xml"/></Relationships>`);
+  z.file('xl/worksheets/sheet1.xml', sheet);
+  z.file('xl/styles.xml', styles);
+  z.file('xl/featurePropertyBag/featurePropertyBag.xml', fpb);
+  return z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+}
+
 const reportName = s => safeName(`${s.reg}_Finding Report_${todayYMD()}.pdf`);
 const pdfTxt = t => String(t ?? '').replace(/[↔→]/g, '-').replace(/[^\x20-\x7E\xA0-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u20AC\n]/g, '?');
 async function pdfImage(p) {
@@ -1096,6 +1170,7 @@ async function buildZip(idx = 0) {
       const sHead = ['Sample', 'Type', 'Name', 'Pre-selected', 'Origin Item', 'P/N', 'S/N', 'Row', 'Seats', 'Description', 'No. of Photos', 'Created'];
       const sRows = Object.keys(SAMPLE_KINDS).flatMap(k => samplesOf(s, k)).map(x => [`${SAMPLE_KINDS[x.kind].item} ${smNo(x)}`, SAMPLE_KINDS[x.kind].label, x.name || '', x.pre ? 'yes' : '', smOrigin(s, x),
         x.pn, x.sn, x.row, x.side, x.desc, c.photos.filter(p => p.sampleId === x.id).length, fmtDT(x.createdAt)]);
+      if (samplesOf(s, 'comp').length) R.file(compXlsxName(s), await buildCompXLSX(c));
       R.file('Samples.csv', '﻿' + [sHead, ...sRows].map(r => r.map(csvCell).join(';')).join('\r\n'));
       if (c.findings.length) { busy('Creating finding report …'); R.file(reportName(s), await buildReportPDF(c)); }
       R.file('Findings.csv', '﻿' + [head, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n'));

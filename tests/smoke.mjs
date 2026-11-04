@@ -55,6 +55,8 @@ try {
   const z1 = await pg.evaluate(async () => { await buildZip(0); const z = await JSZip.loadAsync(exportReady.ready.blob); return { parts: exportReady.parts.length, files: Object.keys(z.files).filter(n => !n.endsWith('/')) }; });
   ok(z1.parts === 1 && z1.files.filter(f => /\.jpg$/.test(f)).length === 3, `single ZIP with 3 photos`);
   ok(['Findings.csv', 'Samples.csv', 'Pruefprotokoll.html', 'session.json'].every(n => z1.files.some(f => f.endsWith('/' + n))) && z1.files.some(f => f.endsWith('.pdf')), 'ZIP contains CSVs, protocol, json, report PDF');
+  ok(z1.files.some(f => /_Component Samples_.*\.xlsx$/.test(f)), 'ZIP contains component samples XLSX');
+  if (process.env.XLSX_OUT) { const b = await pg.evaluate(async () => Array.from(await buildCompXLSX(cur))); (await import('fs')).writeFileSync(process.env.XLSX_OUT, Buffer.from(b)); }
   const z2 = await pg.evaluate(async () => { window.__partMax = 1; await touch(); const all = []; let n = 0;
     for (let i = 0; ; i++) { await buildZip(i); n = exportReady.parts.length; const z = await JSZip.loadAsync(exportReady.ready.blob); all.push(...Object.keys(z.files).filter(f => /\.jpg$/.test(f))); if (i + 1 >= n) break; }
     window.__partMax = 0; return { n, all }; });
