@@ -89,6 +89,10 @@ try {
   await pg.click('main .grid .ph'); await pg.waitForSelector('[data-act=vMakeFinding]'); const nF = await pg.evaluate(() => cur.findings.length);
   await pg.click('[data-act=vMakeFinding]'); await pg.waitForTimeout(400);
   ok(await pg.evaluate(n => cur.findings.length === n + 1 && cur.photos.some(p => p.findingId === cur.findings.at(-1).id && p.itemId === '5.2') && location.hash.includes('/f/'), nF), 'make finding from existing photo');
+  // Finding-Baukasten: Bausteine antippen -> Text übernehmen
+  await pg.click('[data-act=builder]'); await pg.click('[data-act=bChip][data-g=comp][data-v="Radome"]'); await pg.click('[data-act=bChip][data-g=def][data-v=Dent]');
+  await pg.click('[data-act=bChip][data-g=side][data-v=LH]'); await pg.fill('[data-b=l]', '20'); await pg.click('[data-act=bInsert]'); await pg.waitForTimeout(400);
+  ok(await pg.evaluate(() => cur.findings.at(-1).text === 'Dent on LH radome, approx. 20 mm.'), 'finding builder inserts text');
 } catch (e) { ok(false, 'exception: ' + e.message); }
 ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 await b.close(); srv.close();

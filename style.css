@@ -145,3 +145,10 @@ textarea.inp{resize:vertical}
 .sent{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--okbg);color:var(--ok);margin-right:6px}
 .v-mkf{background:#e8a317;color:#000;border:0;font-weight:700;min-height:46px;margin:2px 0 4px}
 .pre-blk{margin:0 0 6px 30px}.pre-blk>summary{cursor:pointer;padding:6px 0;font-weight:600;color:var(--acc);font-size:14px}
+.bld-btn{margin-top:8px}
+.bprev{position:sticky;top:-16px;z-index:1;background:var(--card);padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-weight:600;min-height:44px;margin:0 -2px}
+.bchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.bchip{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:inherit;font-weight:600;font-size:14px}
+.bchip.on{background:var(--acc);color:var(--accfg);border-color:transparent}
+.bsize{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.bact{display:flex;gap:8px;margin-top:16px;position:sticky;bottom:calc(-16px - var(--sb));background:var(--card);padding:10px 0 calc(10px + var(--sb))}

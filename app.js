@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.19.2';
+const APP_VERSION = '0.20.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -601,7 +601,8 @@ function viewFinding(c, fid) {
   const l = leafById(c.s, f.itemId), ph = c.photos.filter(p => p.findingId === f.id).sort(byCreated);
   let h = topbar(`Finding ${fNo(f)}`, l ? `${l.id} ${l.title}` : '', 'history');
   h += `<main class="wrap has-bbar"><div class="card pad"><div class="lbl">Description</div>
-  <textarea class="inp" rows="3" data-field="fText" data-fid="${f.id}" placeholder="Short description (dictate via keyboard mic)">${esc(f.text)}</textarea></div>`;
+  <textarea class="inp" rows="3" data-field="fText" data-fid="${f.id}" placeholder="Short description (dictate via keyboard mic)">${esc(f.text)}</textarea>
+  <button class="btn block bld-btn" data-act="builder" data-fid="${f.id}">🧩 Finding builder</button></div>`;
   h += `<div class="card pad"><div class="lbl">Photos <span class="mut">${ph.length}</span></div>${photoGrid(ph, 'f:' + f.id)}
   ${ph.length > 1 ? '<div class="mut sm">Photos marked PDF go into the finding report – tap a photo to change.</div>' : ''}
   <button class="link" data-act="library" data-item="${f.itemId}" data-fid="${f.id}">Add from library</button></div>`;
@@ -615,6 +616,70 @@ function viewFinding(c, fid) {
   h += `<div class="bbar"><button class="btn pri big grow" data-act="cam" data-item="${f.itemId}" data-fid="${f.id}">📷 Photo for finding</button></div>`;
   return h;
 }
+/* ---------------- Finding-Baukasten ----------------
+   Bausteine antippen -> englischer Satz, der in die Beschreibung übernommen wird.
+   Bauteil-Listen je Prüfpunkt (Präfix-Match: '5.3.1' -> '5.3.1', '5.3', '5'); einfach erweitern. */
+const B_COMP = {
+  '1': ['Registration marking', 'National flag', 'Lease plate', 'Owner plate', 'Manufacturer plate', 'Placard'],
+  '4.1': ['Fire extinguisher', 'PBE', 'Portable oxygen bottle', 'First aid kit', 'Emergency medical kit', 'Life vest', 'Flashlight', 'Megaphone', 'Crash axe', 'ELT', 'Escape slide', 'Escape rope', 'Bracket', 'Safety pin / seal', 'Placard'],
+  '4.2': ['Windshield', 'Side window', 'Captain seat', 'F/O seat', 'Observer seat', 'Seat harness', 'Sun visor', 'Panel', 'Switch', 'Display', 'Oxygen mask', 'Flashlight', 'Escape rope', 'Floor covering', 'Lighting', 'Placard'],
+  '4.3': ['Passenger seat', 'Seat belt', 'Tray table', 'Armrest', 'Seat cushion', 'PSU', 'Overhead bin', 'Attendant seat', 'Lavatory', 'Galley', 'Carpet', 'Floor covering', 'Sidewall panel', 'Ceiling panel', 'Window shade', 'Exit sign', 'Floor path marking', 'Smoke detector', 'Lighting', 'Placard'],
+  '5.1': ['Fuselage skin', 'Radome', 'Wing skin', 'Leading edge', 'Slat', 'Flap', 'Flap track fairing', 'Aileron', 'Spoiler', 'Wing tip / Sharklet', 'Horizontal stabilizer', 'Elevator', 'Vertical stabilizer', 'Rudder', 'Belly fairing', 'Antenna', 'Static discharger', 'Pitot probe', 'Static port', 'AOA sensor', 'Window', 'Navigation light', 'Beacon light', 'Logo light', 'Fastener', 'Repair / doubler', 'Marking', 'Placard'],
+  '5.3': ['Inlet cowl', 'Inlet lip', 'Acoustic liner', 'Spinner', 'Fan blade', 'Fan cowl', 'Fan cowl latch', 'Thrust reverser cowl', 'Thrust reverser latch', 'Exhaust nozzle', 'Exhaust plug', 'Pylon', 'Pylon fairing', 'Drain mast', 'Access panel', 'Placard'],
+  '5.3.3': ['APU access door', 'APU air intake', 'APU intake flap', 'APU exhaust', 'APU compartment', 'Drain mast', 'Access panel', 'Placard'],
+  '5.4': ['Tire', 'Wheel', 'Brake', 'Brake wear indicator pin', 'Axle', 'Shock absorber', 'Sliding tube (chrome)', 'Torque link', 'Side brace', 'Drag brace', 'Retraction actuator', 'Steering', 'Gear door', 'Hydraulic line', 'Wiring harness', 'Proximity sensor', 'Taxi / landing light', 'Placard'],
+  '5.5': ['Passenger door', 'Emergency exit', 'Overwing exit', 'Cargo door', 'Service door', 'Access panel', 'Door seal', 'Door handle', 'Latch', 'Hinge', 'Fastener', 'Refuel panel', 'Placard'],
+  '5.6': ['Cargo door', 'Cargo liner', 'Floor panel', 'Ceiling panel', 'Sidewall panel', 'Cargo net', 'Door net', 'Roller', 'Ball mat', 'PDU', 'Restraint lock', 'Decompression panel', 'Smoke detector', 'Lighting', 'Placard'],
+  '5.7': ['Equipment rack', 'LRU', 'Connector', 'Wiring harness', 'Bonding strap', 'Cooling duct', 'Fan', 'Access door', 'Placard'],
+  '*': ['Panel', 'Fastener', 'Bracket', 'Seal', 'Hose', 'Line', 'Wiring', 'Light', 'Marking', 'Placard'],
+};
+B_COMP['5.2'] = B_COMP['5.1'];
+// Befund: s = Oberflächenschaden ("Dent on X"), c = Zustand des Bauteils ("X missing"), l = Leck ("Hydraulic leak at X")
+const B_DEF = [['Dent', 's'], ['Scratch', 's'], ['Crack', 's'], ['Corrosion', 's'], ['Paint damage', 's'], ['Chafing', 's'], ['Erosion', 's'], ['Nick', 's'], ['Gouge', 's'],
+  ['Delamination', 's'], ['Deformation', 's'], ['Burn mark', 's'], ['Contamination', 's'],
+  ['Hydraulic leak', 'l'], ['Oil leak', 'l'], ['Fuel leak', 'l'],
+  ['missing', 'c'], ['loose', 'c'], ['broken', 'c'], ['damaged', 'c'], ['worn', 'c'], ['torn', 'c'], ['inoperative', 'c'], ['illegible', 'c'], ['expired', 'c'], ['not secured', 'c']];
+const B_SIDE = ['LH', 'RH', 'Center'], B_AREA = ['FWD', 'Mid', 'AFT', 'Upper', 'Lower', 'Inboard', 'Outboard'];
+let bld = null;
+function bComps(itemId) { for (let k = itemId; k; k = k.includes('.') ? k.slice(0, k.lastIndexOf('.')) : '') if (B_COMP[k]) return B_COMP[k]; return B_COMP['*']; }
+function bText(b) {
+  const comp = (b.compOwn || b.comp || '').trim(); if (!comp && !b.def) return '';
+  const side = b.side && !/^(LH|RH)\b/.test(comp) ? b.side + ' ' : '';
+  const lc = comp.split(' ').map(w => /^[A-Z0-9/&]{2,}$|^[A-Z]\/[A-Z]/.test(w) ? w : w.toLowerCase()).join(' '); // Abkürzungen (PSU, APU) bleiben groß
+  const cs = side + (lc || (b.wheel ? 'wheel' : 'component')) + (b.wheel ? ' #' + b.wheel : ''), d = B_DEF.find(x => x[0] === b.def);
+  let t = !d ? cs + ':' : d[1] === 'c' ? `${cs} ${d[0]}` : d[1] === 'l' ? `${d[0]} at ${cs}` : `${d[0]} on ${cs}`;
+  const area = B_AREA.filter(a => b.area.has(a)).map(a => /^(FWD|AFT)$/.test(a) ? a : a.toLowerCase()).join(' ');
+  const parts = [];
+  if (area) parts.push(area + ' area');
+  if (b.clock) parts.push(`at ${b.clock} o'clock position`);
+  if (b.loc.trim()) parts.push(b.loc.trim());
+  const dim = [b.l, b.w].filter(x => x.trim()).join(' x ');
+  if (dim) parts.push(`approx. ${dim} mm`);
+  if (b.dp.trim()) parts.push(`depth approx. ${b.dp.trim()} mm`);
+  if (b.qty.trim() && b.qty.trim() !== '1') parts.push(`qty ${b.qty.trim()}`);
+  t = [t.replace(/^\w/, m => m.toUpperCase()), ...parts].join(', ');
+  return t.endsWith(':') ? t : t + '.';
+}
+function openBuilder(c, fid) {
+  const f = c.findings.find(x => x.id === fid); if (!f) return;
+  bld = { fid, comp: '', compOwn: '', side: '', area: new Set(), clock: '', wheel: '', def: '', loc: '', l: '', w: '', dp: '', qty: '' };
+  const it = f.itemId, chips = (g, arr, lbl = x => x) => `<div class="bchips" data-g="${g}">${arr.map(v => `<button class="bchip" data-act="bChip" data-g="${g}" data-v="${esc(v)}">${esc(lbl(v))}</button>`).join('')}</div>`;
+  const fam = gearFam(c.s.type), gk = Object.keys(GEAR_ITEMS).find(k => it === k);
+  const wheels = gk && fam ? (GEAR_ITEMS[gk] === 'nlg' ? WHEELS[fam].nlg : WHEELS[fam][GEAR_ITEMS[gk]].flat()) : [];
+  const eng = /^5\.3/.test(it);
+  let h = `<h2>Finding builder</h2><div class="bprev" id="bPrev"><span class="mut">Tap component and finding …</span></div>
+  <div class="lbl">Component</div>${chips('comp', bComps(it))}<input class="inp" data-b="compOwn" placeholder="… or type component" style="margin-top:6px">
+  <div class="lbl">Finding</div>${chips('def', B_DEF.map(x => x[0]), v => v.replace(/^\w/, m => m.toUpperCase()))}
+  <div class="lbl">Side</div>${chips('side', B_SIDE)}
+  <div class="lbl">Area</div>${chips('area', B_AREA)}`;
+  if (wheels.length) h += `<div class="lbl">Wheel / tire # <span class="mut">(${esc(WHEELS[fam].label)})</span></div>${chips('wheel', wheels.map(String))}`;
+  if (eng) h += `<div class="lbl">Clock position</div>${chips('clock', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'])}`;
+  h += `<div class="lbl">Location detail</div><input class="inp" data-b="loc" placeholder="e.g. 3rd fastener row, near access panel / STA / frame">
+  <div class="lbl">Size (mm) · quantity</div><div class="bsize"><input class="inp" data-b="l" inputmode="decimal" placeholder="length"><input class="inp" data-b="w" inputmode="decimal" placeholder="width"><input class="inp" data-b="dp" inputmode="decimal" placeholder="depth"><input class="inp" data-b="qty" inputmode="numeric" placeholder="qty"></div>
+  <div class="bact"><button class="btn" data-act="sheetClose">Cancel</button><button class="btn pri grow" data-act="bInsert" data-fid="${fid}">${f.text?.trim() ? 'Add to description' : 'Use as description'}</button></div>`;
+  openSheet(h);
+}
+function bUpdate() { const t = bText(bld), el = $('#bPrev'); if (el) el.innerHTML = t ? esc(t) : '<span class="mut">Tap component and finding …</span>'; }
 /* Support-Dokumente (z. B. LOPA-PDF aus OneDrive) je Sample-Art: nur zum Nachschlagen, nicht im Export. */
 function supportBox(c, kind) {
   const list = (c.s.support || []).filter(d => d.kind === kind);
@@ -1472,6 +1537,19 @@ document.addEventListener('click', async e => {
       case 'exportTemplate': exportTemplate(); break;
       case 'sheetCancel': closeSheet(); break;
       case 'sheetBg': if (e.target === el) closeSheet(); break;
+      case 'sheetClose': closeSheet(); bld = null; break;
+      case 'builder': openBuilder(c, d.fid); break;
+      case 'bChip': {
+        const g = d.g, v = d.v;
+        if (g === 'area') { bld.area.has(v) ? bld.area.delete(v) : bld.area.add(v); el.classList.toggle('on'); }
+        else { bld[g] = bld[g] === v ? '' : v; el.parentNode.querySelectorAll('.bchip').forEach(x => x.classList.toggle('on', x === el && bld[g] === v)); }
+        bUpdate(); break;
+      }
+      case 'bInsert': {
+        const t = bText(bld); if (!t) { toast('Select component or finding first'); break; }
+        const fi = c.findings.find(x => x.id === d.fid), old = (fi.text || '').trim();
+        fi.text = old ? old + '\n' + t : t; dirtyF.add(fi); await flush(); bld = null; closeSheet(); render(); break;
+      }
       case 'toastAct': { const fn = toastFn; $('#toast').hidden = true; toastFn = null; fn?.(); break; }
       case 'delFinding': {
         const f = c.findings.find(x => x.id === d.fid);
@@ -1605,6 +1683,7 @@ async function onField(el, commit) {
   }
 }
 document.addEventListener('toggle', e => { const k = e.target.dataset?.pk; if (k) e.target.open ? prepOpen.add(k) : prepOpen.delete(k); }, true);
+document.addEventListener('input', e => { const k = e.target.dataset?.b; if (k && bld) { bld[k] = e.target.value; bUpdate(); } });
 document.addEventListener('input', e => { if (e.target.dataset.field) onField(e.target, false).catch(console.error); });
 document.addEventListener('change', e => { if (e.target.dataset.field) onField(e.target, true).catch(err => toast('Error: ' + err.message)); });
 
