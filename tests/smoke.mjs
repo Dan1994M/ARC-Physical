@@ -83,6 +83,11 @@ try {
   await pg.click('[data-act=shareReport]'); await pg.waitForTimeout(400);
   ok(await pg.evaluate(() => cur.findings.filter(f => f.sentAt).length === 1 && cur.s.reportSeq === 1), 'share marks findings as sent');
   ok(await pg.evaluate(() => { rptSel = null; const x = rptScope(cur); return x.fs.length === 1 && x.fs[0].itemId === '5.4.1' && x.part === 2; }), 'only new: next report = Part 2 with remaining finding');
+  // Finding aus vorhandenem Foto (Button in der Vollansicht)
+  await pg.evaluate(() => busy(false)); await go('i/5.2'); await pg.click('.bbar [data-act=cam]'); await shot(); await go('i/5.2');
+  await pg.click('main .grid .ph'); await pg.waitForSelector('[data-act=vMakeFinding]'); const nF = await pg.evaluate(() => cur.findings.length);
+  await pg.click('[data-act=vMakeFinding]'); await pg.waitForTimeout(400);
+  ok(await pg.evaluate(n => cur.findings.length === n + 1 && cur.photos.some(p => p.findingId === cur.findings.at(-1).id && p.itemId === '5.2') && location.hash.includes('/f/'), nF), 'make finding from existing photo');
 } catch (e) { ok(false, 'exception: ' + e.message); }
 ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 await b.close(); srv.close();

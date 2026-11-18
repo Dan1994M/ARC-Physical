@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.19.0';
+const APP_VERSION = '0.19.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -436,6 +436,10 @@ async function deleteEmptyFinding(fid) {
   c.findings = c.findings.filter(x => x.id !== fid);
   if (f && f.num === c.s.findingSeq) c.s.findingSeq--; // keine Lücke in der Nummerierung
   await touch();
+}
+async function findingFromPhoto(p) {
+  const c = cur, nf = await createFinding(p.itemId); p.findingId = nf.id; p.inReport = true;
+  await savePhotoMetas([p]); await touch(); closeViewer(); location.hash = `#/s/${c.s.id}/f/${nf.id}`;
 }
 async function createFinding(itemId) {
   const c = cur;
@@ -879,6 +883,7 @@ function renderViewer() {
   <div class="v-img">${viewer.url ? `<img src="${viewer.url}" alt="">` : '<span>Image not readable</span>'}
   ${i > 0 ? '<button class="v-nav l" data-act="vPrev">‹</button>' : ''}${i < list.length - 1 ? '<button class="v-nav r" data-act="vNext">›</button>' : ''}</div>
   <div class="v-panel"><div class="v-meta">${fmtDT(p.createdAt)}${p.annotated ? (viewer.orig ? ' · Original' : ' · marked copy') : ''}</div><label>Checklist item</label>${itemSelect(c.s, p.itemId, 'vItem')}
+  ${p.findingId ? '' : `<button class="btn v-mkf" data-act="vMakeFinding">⚠ Make finding from this photo</button>`}
   <label>Finding</label><select class="inp" data-field="vFinding"><option value="">– no finding (evidence photo) –</option>
   ${[...c.findings].sort((a, b) => a.num - b.num).map(f => `<option value="${f.id}" ${p.findingId === f.id ? 'selected' : ''}>${fNo(f)} · ${esc(f.itemId)} ${esc((f.text || '').slice(0, 30))}</option>`).join('')}
   <option value="__new">+ New finding from this photo</option></select>
@@ -1504,6 +1509,7 @@ document.addEventListener('click', async e => {
         }
         break;
       }
+      case 'vMakeFinding': await findingFromPhoto(c.photos.find(x => x.id === viewer.pid)); break;
       case 'openReport': window.open(reportReady.url, '_blank'); break;
       case 'rptDiscard': URL.revokeObjectURL(reportReady.url); reportReady = null; render(); break;
       case 'rptNew': rptOnlyNew = d.v === '1'; rptSel = null; render(); break;
@@ -1589,7 +1595,7 @@ async function onField(el, commit) {
     } break;
     case 'vFinding': if (commit) {
       const p = c.photos.find(x => x.id === viewer.pid);
-      if (v === '__new') { const nf = await createFinding(p.itemId); p.findingId = nf.id; await savePhotoMetas([p]); await touch(); closeViewer(); location.hash = `#/s/${c.s.id}/f/${nf.id}`; break; }
+      if (v === '__new') { await findingFromPhoto(p); break; }
       p.findingId = v || null;
       if (v) p.itemId = c.findings.find(x => x.id === v).itemId;
       await savePhotoMetas([p]); await touch(); closeViewer(); toast(v ? 'Photo assigned to finding' : 'Photo set as evidence photo');
