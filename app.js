@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.20.1';
+const APP_VERSION = '0.20.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -652,9 +652,14 @@ function bText(b) {
   // Detailteil: Anzahl wandert in den Teilnamen ("3 rivets"), ohne Anzahl "rivet(s)"
   const pRaw = (b.partOwn.trim() || b.part).replace(/-$/, ''), unc = !b.partOwn.trim() && b.part.endsWith('-'), q = b.qty.trim();
   const pl = w => /(s|sh|ch|x)$/.test(w) ? w + 'es' : w + 's', pw = pRaw.toLowerCase();
-  const pt = !pRaw ? '' : unc || b.partOwn.trim() ? pw : q === '1' ? pw : q ? `${q} ${pl(pw)}` : `${pw}(s)`;
+  const pt = !pRaw ? '' : unc || b.partOwn.trim() ? (q ? `${q} EA ${pw}` : pw) : q === '1' ? `1 EA ${pw}` : q ? `${q} EA ${pl(pw)}` : `${pw}(s)`;
+  const UNC = /^(Corrosion|Paint damage|Chafing|Erosion|Delamination|Deformation|Contamination)$/; // nicht zählbar -> Menge ans Ende
   let t;
   if (pt) t = !d ? `${pt} on ${cs}:` : d[1] === 'c' ? `${pt} ${d[0]} on ${cs}` : d[1] === 'l' ? `${d[0]} at ${pt} of ${cs}` : `${d[0]} on ${pt} of ${cs}`;
+  else if (q && q !== '1' && d && !UNC.test(d[0])) { // Menge vorn: "2 EA dents on radome", "2 EA placards missing"
+    const n = q === '1' ? x => x : x => x.replace(/^(.*?)(\S+)(\s#\d+)?$/, (m, a, w, h) => a + pl(w) + (h || ''));
+    t = d[1] === 'c' ? `${q} EA ${n(cs)} ${d[0]}` : `${q} EA ${n(d[0].toLowerCase())} ${d[1] === 'l' ? 'at' : 'on'} ${cs}`;
+  }
   else t = !d ? cs + ':' : d[1] === 'c' ? `${cs} ${d[0]}` : d[1] === 'l' ? `${d[0]} at ${cs}` : `${d[0]} on ${cs}`;
   const area = B_AREA.filter(a => b.area.has(a)).map(a => /^(FWD|AFT)$/.test(a) ? a : a.toLowerCase()).join(' ');
   const parts = [];
@@ -664,7 +669,7 @@ function bText(b) {
   const dim = [b.l, b.w].filter(x => x.trim()).join(' x ');
   if (dim) parts.push(`approx. ${dim} mm`);
   if (b.dp.trim()) parts.push(`depth approx. ${b.dp.trim()} mm`);
-  if (!pt && q && q !== '1') parts.push(`qty ${q}`);
+  if (!pt && q && q !== '1' && (!d || UNC.test(d[0]))) parts.push(`${q} EA`);
   t = [t.replace(/^\w/, m => m.toUpperCase()), ...parts].join(', ');
   return t.endsWith(':') ? t : t + '.';
 }

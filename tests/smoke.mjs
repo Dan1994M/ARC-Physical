@@ -93,7 +93,7 @@ try {
   await pg.click('[data-act=builder]'); await pg.click('[data-act=bChip][data-g=comp][data-v="Radome"]'); await pg.click('[data-act=bChip][data-g=def][data-v=Dent]');
   await pg.click('[data-act=bChip][data-g=side][data-v=LH]'); await pg.fill('[data-b=l]', '20'); await pg.click('[data-act=bInsert]'); await pg.waitForTimeout(400);
   ok(await pg.evaluate(() => cur.findings.at(-1).text === 'Dent on LH radome, approx. 20 mm.'), 'finding builder inserts text');
-  ok(await pg.evaluate(() => bText({ comp: 'Exhaust nozzle', compOwn: '', part: 'Rivet', partOwn: '', side: '', area: new Set(), clock: '', wheel: '', def: 'loose', loc: '', l: '', w: '', dp: '', qty: '3' }) === '3 rivets loose on exhaust nozzle.'), 'finding builder detail part');
+  ok(await pg.evaluate(() => bText({ comp: 'Exhaust nozzle', compOwn: '', part: 'Rivet', partOwn: '', side: '', area: new Set(), clock: '', wheel: '', def: 'loose', loc: '', l: '', w: '', dp: '', qty: '3' }) === '3 EA rivets loose on exhaust nozzle.'), 'finding builder detail part');
 } catch (e) { ok(false, 'exception: ' + e.message); }
 ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 await b.close(); srv.close();
