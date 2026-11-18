@@ -50,6 +50,7 @@ try {
   await pg.selectOption('.pre-sm [data-field=sm_area]', '4.1.2'); await pg.waitForTimeout(400); await pg.fill('.pre-sm [data-field=sm_name]', 'EEL-X'); await pg.waitForTimeout(600);
   await go('i/4.1'); ok(await pg.evaluate(() => { const x = cur.s.samples.find(y => y.kind === 'eel'); return x?.pre && x.area === '4.1.2' && x.name === 'EEL-X'; }) && await pg.locator('main').innerText().then(t => t.includes('4.1.2.01')), 'pre-selected EEL sample under 4.1.2');
   ok(await pg.evaluate(() => { const a = { kind: 'eel', area: '4.1.1', num: nextSmNum(cur.s, 'eel', '4.1.1') }; cur.s.samples.push(a); const b = nextSmNum(cur.s, 'eel', '4.1.2'); cur.s.samples.pop(); return smNo(a) === '4.1.1.01' && b === 2; }), 'EEL numbering separate per area');
+  await go('i/1.1'); await go('prep'); ok(await pg.evaluate(() => [...document.querySelectorAll('details.pre-blk')].length === 2 && [...document.querySelectorAll('details.pre-blk')].every(x => !x.open)), 'pre-selected samples collapsed after revisiting prep');
   await go('i/6.4'); ok(await pg.locator('main').innerText().then(t => t.includes('Pre-selected')), 'pre-selected sample shown in 6.4');
   const pdf = await pg.evaluate(async () => { const bl = await buildReportPDF(cur); const a = new Uint8Array(await bl.arrayBuffer()); return String.fromCharCode(...a.slice(0, 5)) + '|' + a.length; });
   ok(pdf.startsWith('%PDF-'), `finding report PDF (${pdf.split('|')[1]} bytes)`);

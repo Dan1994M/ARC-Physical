@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.19.1';
+const APP_VERSION = '0.19.2';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -229,6 +229,7 @@ const put = (s, v) => tx([s], 'readwrite', t => { t.objectStore(s).put(v); });
 /* ---------------- Modell ---------------- */
 let cur = null; // { s, findings, photos }
 let capture = null, fFilter = 'all', exportReady = null, viewer = null, reportReady = null;
+const prepOpen = new Set(); // aufgeklappte Pre-select-Blöcke (nur für die laufende Sitzung)
 let rptOnlyNew = true, rptSel = null; // Report-Auswahl: nur ungesendete Findings; rptSel = Set gewählter Prüfpunkt-IDs (null = alle)
 const thumbURLs = new Map();
 
@@ -649,9 +650,10 @@ function viewPrep(c) {
   for (const x of PREP) {
     h += `<label class="chk prep"><input type="checkbox" data-field="prep" data-id="${x.id}" ${d[x.id] ? 'checked' : ''}> <span>${esc(x.text)}${x.optional ? ' <span class="mut">(optional)</span>' : ''}</span></label>`;
     if (!x.kind || !d[x.id]) continue;
-    const k = SAMPLE_KINDS[x.kind], list = samplesOf(s, x.kind).filter(sm => sm.pre);
+    const k = SAMPLE_KINDS[x.kind], list = samplesOf(s, x.kind).filter(sm => sm.pre), nd = (s.support || []).filter(u => u.kind === x.kind).length;
+    h += `<details class="pre-blk" data-pk="${x.id}" ${prepOpen.has(x.id) ? 'open' : ''}><summary>${list.length} sample${list.length === 1 ? '' : 's'}${nd ? ` · ${nd} document${nd === 1 ? '' : 's'}` : ''}</summary>`;
     for (const sm of list) h += `<div class="pre-sm"><div class="sm-h"><b>${smNo(sm)}</b><span class="mut grow">📷 ${c.photos.filter(p => p.sampleId === sm.id).length}</span><button class="link bad" data-act="smDel" data-sid="${sm.id}">Delete</button></div>${smFields(sm, lopaSides(s.type))}</div>`;
-    h += `<button class="btn block pre-add" data-act="smPre" data-kind="${x.kind}">＋ Add ${esc(k.label)} sample → ${k.item}</button>` + supportBox(c, x.kind);
+    h += `<button class="btn block pre-add" data-act="smPre" data-kind="${x.kind}">＋ Add ${esc(k.label)} sample → ${k.item}</button>` + supportBox(c, x.kind) + '</details>';
   }
   h += `<label class="lbl" style="margin-top:14px;display:block">Notes</label><textarea class="inp" rows="3" data-field="prepNote" placeholder="e.g. pre-selected samples, open questions">${esc(s.prepNote || '')}</textarea></div>`;
   return h + '</main>';
@@ -1439,7 +1441,7 @@ document.addEventListener('click', async e => {
       case 'newSession': sessionSheet(); break;
       case 'editSession': sessionSheet(c.s); break;
       case 'smNew': smDraft = { kind: d.kind || defaultKind(d.origin), origin: d.kind ? null : d.origin, fixed: !!d.kind }; sampleSheet(); break;
-      case 'smPre': { // Vorausgewähltes Sample ohne Foto anlegen (Preparation)
+      case 'smPre': prepOpen.add(PREP.find(x => x.kind === d.kind)?.id); { // Vorausgewähltes Sample ohne Foto anlegen (Preparation)
         const area = d.kind === 'eel' ? d.area || '4.1.1' : '', num = nextSmNum(c.s, d.kind, area);
         (c.s.samples ||= []).push({ id: uid(), kind: d.kind, origin: null, name: '', pn: '', sn: '', row: '', side: d.kind === 'lopa' ? lopaSides(c.s.type)[0] : '', area, pre: !d.area, desc: '', num, createdAt: nowISO() });
         await touch(); render(); setTimeout(() => [...document.querySelectorAll('.pre-sm input')].filter(e => !e.value).pop()?.focus(), 50); break;
@@ -1563,7 +1565,7 @@ async function onField(el, commit) {
   switch (f) {
     case 'naReason': itemState(c.s, el.dataset.id).reason = v; sessDirty = true; schedule(); if (commit) { await flush(); render(); } break;
     case 'itemNote': itemState(c.s, el.dataset.id).note = v; sessDirty = true; schedule(); break;
-    case 'prep': if (commit) { (c.s.prep ||= {})[el.dataset.id] = v; await touch(); render(); } break;
+    case 'prep': if (commit) { (c.s.prep ||= {})[el.dataset.id] = v; v ? prepOpen.add(el.dataset.id) : prepOpen.delete(el.dataset.id); await touch(); render(); } break; // frisch angehakt: einmal aufklappen
     case 'prepNote': c.s.prepNote = v; sessDirty = true; schedule(); break;
     case 'closeReason': c.s.closeReason = v; sessDirty = true; schedule(); break;
     case 'fText': fi.text = v; dirtyF.add(fi); schedule(); break;
@@ -1602,6 +1604,7 @@ async function onField(el, commit) {
     } break;
   }
 }
+document.addEventListener('toggle', e => { const k = e.target.dataset?.pk; if (k) e.target.open ? prepOpen.add(k) : prepOpen.delete(k); }, true);
 document.addEventListener('input', e => { if (e.target.dataset.field) onField(e.target, false).catch(console.error); });
 document.addEventListener('change', e => { if (e.target.dataset.field) onField(e.target, true).catch(err => toast('Error: ' + err.message)); });
 
@@ -1630,7 +1633,7 @@ $('#viewer').addEventListener('touchend', e => {
   if (Math.abs(dx) > 60) viewerStep(dx < 0 ? 1 : -1);
 }, { passive: true });
 
-window.addEventListener('hashchange', async () => { await flush(); closeEditor(); if (viewer) { const el = $('#viewer'); el.hidden = true; el.innerHTML = ''; if (viewer.url) URL.revokeObjectURL(viewer.url); viewer = null; document.body.classList.remove('noscroll'); } closeSheet(); render(); });
+window.addEventListener('hashchange', async () => { if (!location.hash.endsWith('/prep')) prepOpen.clear(); await flush(); closeEditor(); if (viewer) { const el = $('#viewer'); el.hidden = true; el.innerHTML = ''; if (viewer.url) URL.revokeObjectURL(viewer.url); viewer = null; document.body.classList.remove('noscroll'); } closeSheet(); render(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
