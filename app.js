@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.20.0';
+const APP_VERSION = '0.20.1';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -639,15 +639,23 @@ const B_DEF = [['Dent', 's'], ['Scratch', 's'], ['Crack', 's'], ['Corrosion', 's
   ['Delamination', 's'], ['Deformation', 's'], ['Burn mark', 's'], ['Contamination', 's'],
   ['Hydraulic leak', 'l'], ['Oil leak', 'l'], ['Fuel leak', 'l'],
   ['missing', 'c'], ['loose', 'c'], ['broken', 'c'], ['damaged', 'c'], ['worn', 'c'], ['torn', 'c'], ['inoperative', 'c'], ['illegible', 'c'], ['expired', 'c'], ['not secured', 'c']];
+// Detailteil am Bauteil (z. B. Rivets loose on exhaust nozzle); '-' = nicht zählbar
+const B_PART = ['Rivet', 'Fastener', 'Screw', 'Bolt', 'Nut', 'Latch', 'Hinge', 'Seal', 'Bracket', 'Clamp', 'Bonding strap', 'Placard', 'Sealant-'];
 const B_SIDE = ['LH', 'RH', 'Center'], B_AREA = ['FWD', 'Mid', 'AFT', 'Upper', 'Lower', 'Inboard', 'Outboard'];
 let bld = null;
 function bComps(itemId) { for (let k = itemId; k; k = k.includes('.') ? k.slice(0, k.lastIndexOf('.')) : '') if (B_COMP[k]) return B_COMP[k]; return B_COMP['*']; }
 function bText(b) {
-  const comp = (b.compOwn || b.comp || '').trim(); if (!comp && !b.def) return '';
+  const comp = (b.compOwn || b.comp || '').trim(); if (!comp && !b.def && !b.part && !b.partOwn.trim()) return '';
   const side = b.side && !/^(LH|RH)\b/.test(comp) ? b.side + ' ' : '';
   const lc = comp.split(' ').map(w => /^[A-Z0-9/&]{2,}$|^[A-Z]\/[A-Z]/.test(w) ? w : w.toLowerCase()).join(' '); // Abkürzungen (PSU, APU) bleiben groß
   const cs = side + (lc || (b.wheel ? 'wheel' : 'component')) + (b.wheel ? ' #' + b.wheel : ''), d = B_DEF.find(x => x[0] === b.def);
-  let t = !d ? cs + ':' : d[1] === 'c' ? `${cs} ${d[0]}` : d[1] === 'l' ? `${d[0]} at ${cs}` : `${d[0]} on ${cs}`;
+  // Detailteil: Anzahl wandert in den Teilnamen ("3 rivets"), ohne Anzahl "rivet(s)"
+  const pRaw = (b.partOwn.trim() || b.part).replace(/-$/, ''), unc = !b.partOwn.trim() && b.part.endsWith('-'), q = b.qty.trim();
+  const pl = w => /(s|sh|ch|x)$/.test(w) ? w + 'es' : w + 's', pw = pRaw.toLowerCase();
+  const pt = !pRaw ? '' : unc || b.partOwn.trim() ? pw : q === '1' ? pw : q ? `${q} ${pl(pw)}` : `${pw}(s)`;
+  let t;
+  if (pt) t = !d ? `${pt} on ${cs}:` : d[1] === 'c' ? `${pt} ${d[0]} on ${cs}` : d[1] === 'l' ? `${d[0]} at ${pt} of ${cs}` : `${d[0]} on ${pt} of ${cs}`;
+  else t = !d ? cs + ':' : d[1] === 'c' ? `${cs} ${d[0]}` : d[1] === 'l' ? `${d[0]} at ${cs}` : `${d[0]} on ${cs}`;
   const area = B_AREA.filter(a => b.area.has(a)).map(a => /^(FWD|AFT)$/.test(a) ? a : a.toLowerCase()).join(' ');
   const parts = [];
   if (area) parts.push(area + ' area');
@@ -656,19 +664,20 @@ function bText(b) {
   const dim = [b.l, b.w].filter(x => x.trim()).join(' x ');
   if (dim) parts.push(`approx. ${dim} mm`);
   if (b.dp.trim()) parts.push(`depth approx. ${b.dp.trim()} mm`);
-  if (b.qty.trim() && b.qty.trim() !== '1') parts.push(`qty ${b.qty.trim()}`);
+  if (!pt && q && q !== '1') parts.push(`qty ${q}`);
   t = [t.replace(/^\w/, m => m.toUpperCase()), ...parts].join(', ');
   return t.endsWith(':') ? t : t + '.';
 }
 function openBuilder(c, fid) {
   const f = c.findings.find(x => x.id === fid); if (!f) return;
-  bld = { fid, comp: '', compOwn: '', side: '', area: new Set(), clock: '', wheel: '', def: '', loc: '', l: '', w: '', dp: '', qty: '' };
+  bld = { fid, comp: '', compOwn: '', part: '', partOwn: '', side: '', area: new Set(), clock: '', wheel: '', def: '', loc: '', l: '', w: '', dp: '', qty: '' };
   const it = f.itemId, chips = (g, arr, lbl = x => x) => `<div class="bchips" data-g="${g}">${arr.map(v => `<button class="bchip" data-act="bChip" data-g="${g}" data-v="${esc(v)}">${esc(lbl(v))}</button>`).join('')}</div>`;
   const fam = gearFam(c.s.type), gk = Object.keys(GEAR_ITEMS).find(k => it === k);
   const wheels = gk && fam ? (GEAR_ITEMS[gk] === 'nlg' ? WHEELS[fam].nlg : WHEELS[fam][GEAR_ITEMS[gk]].flat()) : [];
   const eng = /^5\.3/.test(it);
   let h = `<h2>Finding builder</h2><div class="bprev" id="bPrev"><span class="mut">Tap component and finding …</span></div>
   <div class="lbl">Component</div>${chips('comp', bComps(it))}<input class="inp" data-b="compOwn" placeholder="… or type component" style="margin-top:6px">
+  <div class="lbl">Detail part <span class="mut">(optional, e.g. rivets on the component)</span></div>${chips('part', B_PART, v => v.replace(/-$/, ''))}<input class="inp" data-b="partOwn" placeholder="… or type detail part" style="margin-top:6px">
   <div class="lbl">Finding</div>${chips('def', B_DEF.map(x => x[0]), v => v.replace(/^\w/, m => m.toUpperCase()))}
   <div class="lbl">Side</div>${chips('side', B_SIDE)}
   <div class="lbl">Area</div>${chips('area', B_AREA)}`;
