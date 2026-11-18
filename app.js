@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '0.18.4';
+const APP_VERSION = '0.19.0';
 
 /* =========================================================
    PRÜFLISTE (Vorlage)
@@ -229,6 +229,7 @@ const put = (s, v) => tx([s], 'readwrite', t => { t.objectStore(s).put(v); });
 /* ---------------- Modell ---------------- */
 let cur = null; // { s, findings, photos }
 let capture = null, fFilter = 'all', exportReady = null, viewer = null, reportReady = null;
+let rptOnlyNew = true, rptSel = null; // Report-Auswahl: nur ungesendete Findings; rptSel = Set gewählter Prüfpunkt-IDs (null = alle)
 const thumbURLs = new Map();
 
 // Beliebig tiefe Verschachtelung: nur Knoten ohne `children` sind prüfbare Punkte
@@ -291,7 +292,7 @@ async function touch() {
 function revokeThumbs() { for (const u of thumbURLs.values()) URL.revokeObjectURL(u); thumbURLs.clear(); }
 async function loadSession(id) {
   if (cur && cur.s.id === id) return cur;
-  revokeThumbs(); cur = null; exportReady = null; reportReady = null;
+  revokeThumbs(); cur = null; exportReady = null; reportReady = null; rptSel = null; rptOnlyNew = true;
   const s = await get('sessions', id); if (!s) return null;
   const [findings, photos] = await Promise.all([bySession('findings', id), bySession('photos', id)]);
   cur = { s, findings, photos };
@@ -651,6 +652,27 @@ function viewPrep(c) {
   h += `<label class="lbl" style="margin-top:14px;display:block">Notes</label><textarea class="inp" rows="3" data-field="prepNote" placeholder="e.g. pre-selected samples, open questions">${esc(s.prepNote || '')}</textarea></div>`;
   return h + '</main>';
 }
+function reportOptions(c) {
+  const sent = c.findings.filter(f => f.sentAt).length, base = rptBase(c), { fs, label } = rptScope(c);
+  const ids = [...new Set(base.map(f => f.itemId))], L = leaves(c.s).filter(l => ids.includes(l.id));
+  const groups = []; for (const l of L) { const g = l.group ? l.group.id : l.id; let G = groups.find(x => x.id === g); if (!G) groups.push(G = { id: g, title: l.group ? l.group.title : l.title, ls: [] }); G.ls.push(l); }
+  const on = id => !rptSel || rptSel.has(id), n = id => base.filter(f => f.itemId === id).length;
+  let h = `<div class="card pad rpt"><b>Finding report</b>
+    <div class="filters" style="margin:8px 0"><button class="chip-btn ${rptOnlyNew ? 'on' : ''}" data-act="rptNew" data-v="1">Only new ${c.findings.length - sent}</button><button class="chip-btn ${rptOnlyNew ? '' : 'on'}" data-act="rptNew" data-v="0">All ${c.findings.length}</button></div>
+    ${sent ? `<div class="mut" style="font-size:13px">${sent} finding${sent === 1 ? '' : 's'} already shared. <button class="link" data-act="rptResetSent">Reset</button></div>` : ''}`;
+  if (groups.length) {
+    h += `<details class="rpt-sel" ${rptSel ? 'open' : ''}><summary>Items: ${rptSel ? 'selection' : 'all'}</summary>`;
+    for (const G of groups) {
+      const gOn = G.ls.every(l => on(l.id));
+      h += `<label class="chk rg"><input type="checkbox" data-act="rptGrp" data-v="${esc(G.id)}" ${gOn ? 'checked' : ''}> ${esc(G.id)} ${esc(G.title)}</label>`;
+      if (!(G.ls.length === 1 && G.ls[0].id === G.id)) for (const l of G.ls) h += `<label class="chk ri"><input type="checkbox" data-act="rptItem" data-v="${esc(l.id)}" ${on(l.id) ? 'checked' : ''}> ${esc(l.id)} ${esc(l.title)} <span class="mut">(${n(l.id)})</span></label>`;
+    }
+    h += `${rptSel ? '<button class="link" data-act="rptAll">Select all</button>' : ''}</details>`;
+  }
+  h += fs.length ? `<button class="btn pri block" data-act="buildReport" style="margin-top:10px">📄 Create finding report (${fs.length})${label ? ' · ' + esc(label.split(' - ')[0]) : ''}</button>`
+    : '<p class="empty">No findings in this selection.</p>';
+  return h + '</div>';
+}
 function viewFindings(c) {
   let h = topbar(c.s.reg, sessSub(c.s), '#/') + tabs(c, 'findings') + '<main class="wrap">';
   const all = [...c.findings].sort((a, b) => a.num - b.num);
@@ -659,16 +681,16 @@ function viewFindings(c) {
   h += `<div class="filters">${Object.keys(flt).map(k => `<button class="chip-btn ${fFilter === k ? 'on' : ''}" data-act="fFilter" data-v="${k}">${lbl[k]} ${all.filter(flt[k]).length}</button>`).join('')}</div>`;
   if (all.length) {
     h += reportReady && reportReady.sid === c.s.id
-      ? `<div class="card pad"><div class="okbox">Report ready: ${esc(reportReady.name)} (${fmtMB(reportReady.blob.size)})</div>
+      ? `<div class="card pad"><div class="okbox">Report ready: ${esc(reportReady.name)} (${fmtMB(reportReady.blob.size)}, ${reportReady.fids.length} finding${reportReady.fids.length === 1 ? '' : 's'})</div>
         <button class="btn pri block" data-act="shareReport">Share / Save to Files</button><button class="btn block" data-act="openReport">Open</button>
-        <button class="link" data-act="buildReport">Regenerate</button></div>`
-      : `<button class="btn pri block" data-act="buildReport" style="margin-bottom:12px">📄 Create finding report (PDF)</button>`;
+        <button class="link" data-act="buildReport">Regenerate</button> <button class="link" data-act="rptDiscard">Change selection</button></div>`
+      : reportOptions(c);
   }
   const list = all.filter(flt[fFilter] || flt.all);
   if (!list.length) h += '<p class="empty">No findings in this view.</p>';
   for (const f of list) {
     const l = leafById(c.s, f.itemId), ph = c.photos.filter(p => p.findingId === f.id).sort(byCreated);
-    h += `<div class="card fcard"><a class="fc-h" href="#/s/${c.s.id}/f/${f.id}"><b>${fNo(f)}</b><span class="mut grow">${esc(l ? l.id + ' ' + l.title : f.itemId)}</span><span class="chev">›</span></a>
+    h += `<div class="card fcard"><a class="fc-h" href="#/s/${c.s.id}/f/${f.id}"><b>${fNo(f)}</b><span class="mut grow">${esc(l ? l.id + ' ' + l.title : f.itemId)}</span>${f.sentAt ? `<span class="sent" title="Shared ${esc(fmtDT(f.sentAt))}">sent</span>` : ''}<span class="chev">›</span></a>
     ${ph.length ? `<div class="fc-ph">${ph.slice(0, 3).map(p => `<button class="ph" data-act="view" data-pid="${p.id}" data-ctx="f:${f.id}">${p.thumb ? `<img src="${thumbURL(p)}" alt="">` : '<span class="noth">Photo</span>'}</button>`).join('')}</div>` : ''}
     <div class="fc-t">${esc(f.text || '(no description)')}</div>
     <div class="fc-wo"><input class="inp" data-field="fWO" data-fid="${f.id}" value="${esc(f.wo)}" placeholder="Enter WO number" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
@@ -1171,7 +1193,15 @@ async function buildCompXLSX(c) {
   return z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 
-const reportName = s => safeName(`${s.reg}_Finding Report_${todayYMD()}.pdf`);
+const reportName = (s, part) => safeName(`${s.reg}_Finding Report_${todayYMD()}${part ? '_Part ' + part : ''}.pdf`);
+// Report-Umfang aus Auswahl: Basis (alle / nur ungesendete) und Prüfpunkt-Filter
+function rptBase(c) { return c.findings.filter(f => !rptOnlyNew || !f.sentAt); }
+function rptScope(c) {
+  const base = rptBase(c), fs = rptSel ? base.filter(f => rptSel.has(f.itemId)) : base;
+  const partial = fs.length < c.findings.length, part = partial ? (c.s.reportSeq || 0) + 1 : 0;
+  const label = partial ? `Part ${part}` + (rptOnlyNew ? ' - new findings' : '') + (rptSel ? ' - selected items' : '') : '';
+  return { fs, part, label };
+}
 const pdfTxt = t => String(t ?? '').replace(/[↔→]/g, '-').replace(/[^\x20-\x7E\xA0-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u20AC\n]/g, '?');
 async function pdfImage(p) {
   const b = (p.annotated && await get('blobs', p.id + '#ann')) || await get('blobs', p.id); if (!b) return null;
@@ -1182,8 +1212,8 @@ async function pdfImage(p) {
     cv.width = cv.height = 0; return r;
   } catch { return null; } finally { URL.revokeObjectURL(url); }
 }
-const RPT = { m: 12, picW: 78, woW: 30, imgH: 56, maxImg: 4 };
-async function buildReportPDF(c) {
+const RPT = { m: 12, picW: 100, woW: 24, imgH: 75, maxImg: 4 };
+async function buildReportPDF(c, opt = {}) {
   const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const s = c.s, W = 210, H = 297, m = RPT.m, cw = W - 2 * m - RPT.picW - RPT.woW, x1 = m + RPT.picW, x2 = x1 + cw, top = 30, bottom = H - 14;
   const head = () => {
@@ -1191,14 +1221,14 @@ async function buildReportPDF(c) {
     doc.setFontSize(12); doc.text('Physical Review Findings', m + doc.getTextWidth(pdfTxt(s.reg)) * 15 / 12 + 4, 15);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
     doc.text(pdfTxt([s.msn && 'MSN ' + s.msn, s.type].filter(Boolean).join(' · ')), m, 20.5);
-    doc.text('Generated ' + fmtDT(nowISO()), W - m, 20.5, { align: 'right' });
+    doc.text(pdfTxt((opt.label ? opt.label + ' · ' : '') + 'Generated ' + fmtDT(nowISO())), W - m, 20.5, { align: 'right' });
     doc.setFillColor(235, 238, 242); doc.rect(m, 23, W - 2 * m, 7, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
     doc.text('Picture', m + 2, 27.6); doc.text('Complaint', x1 + 2, 27.6); doc.text('WO', x2 + 2, 27.6);
     doc.setDrawColor(170); doc.setLineWidth(0.2); doc.rect(m, 23, W - 2 * m, 7);
   };
   head();
   let y = top;
-  const fs = [...c.findings].sort((a, b) => a.num - b.num);
+  const fs = (opt.findings || c.findings).slice().sort((a, b) => a.num - b.num);
   for (const f of fs) {
     busy(`Creating finding report … ${fNo(f)}`);
     const l = leafById(s, f.itemId), sel = reportPhotos(c, f.id), shown = sel.slice(0, RPT.maxImg);
@@ -1208,7 +1238,8 @@ async function buildReportPDF(c) {
     const body = doc.splitTextToSize(pdfTxt(f.text || '(no description)'), cw - 4);
     const rect = f.rectified ? doc.splitTextToSize(pdfTxt('Rectified' + (f.rect ? ': ' + f.rect : '')), cw - 4) : [];
     const lh = 4.2, textH = 4 + lh * (1 + body.length + (rect.length ? rect.length + 0.5 : 0)) + 2;
-    const imgH = imgs.length ? imgs.length * (RPT.imgH + 2) + 2 + (sel.length > shown.length ? 5 : 0) : 12;
+    const more = sel.length > shown.length ? 5 : 0, ih = imgs.length ? Math.min(RPT.imgH, (bottom - top - 2 - more) / imgs.length - 2) : RPT.imgH; // max. eine Seite pro Finding
+    const imgH = imgs.length ? imgs.length * (ih + 2) + 2 + more : 12;
     const rowH = Math.max(textH, imgH, 16);
     if (y + rowH > bottom) { doc.addPage(); head(); y = top; }
     doc.setDrawColor(170); doc.setLineWidth(0.2);
@@ -1216,10 +1247,10 @@ async function buildReportPDF(c) {
     let iy = y + 2;
     if (!imgs.length) { doc.setFont('helvetica', 'italic'); doc.setTextColor(120); doc.text(sel.length ? 'image not displayable' : 'no photo', m + 2, y + 6); doc.setTextColor(0); }
     for (const im of imgs) {
-      if (im) { const bw = RPT.picW - 4, k = Math.min(bw / im.w, RPT.imgH / im.h), w = im.w * k, h = im.h * k;
-        doc.addImage(im.data, 'JPEG', m + 2 + (bw - w) / 2, iy + (RPT.imgH - h) / 2, w, h); }
+      if (im) { const bw = RPT.picW - 4, k = Math.min(bw / im.w, ih / im.h), w = im.w * k, h = im.h * k;
+        doc.addImage(im.data, 'JPEG', m + 2 + (bw - w) / 2, iy + (ih - h) / 2, w, h); }
       else { doc.setFont('helvetica', 'italic'); doc.setTextColor(120); doc.text('image not displayable', m + 2, iy + 5); doc.setTextColor(0); }
-      iy += RPT.imgH + 2;
+      iy += ih + 2;
     }
     if (sel.length > shown.length) { doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.text(`+${sel.length - shown.length} more photo(s)`, m + 2, iy + 2); doc.setFontSize(9); }
     let ty = y + 5;
@@ -1232,7 +1263,7 @@ async function buildReportPDF(c) {
   if (!fs.length) { doc.setFont('helvetica', 'italic'); doc.text('No findings.', m, top + 6); }
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90);
-    doc.text(`Page ${i} of ${n}`, W / 2, H - 7, { align: 'center' }); doc.text(pdfTxt(`${s.reg} · Physical Review Findings`), m, H - 7); doc.setTextColor(0); }
+    doc.text(`Page ${i} of ${n}`, W / 2, H - 7, { align: 'center' }); doc.text(pdfTxt(`${s.reg} · Physical Review Findings${opt.label ? ' · ' + opt.label.split(' - ')[0] : ''}`), m, H - 7); doc.setTextColor(0); }
   return doc.output('blob');
 }
 
@@ -1379,7 +1410,7 @@ async function deleteSession() {
     for (const d of c.s.support || []) t.objectStore('blobs').delete('sup:' + d.id);
     for (const p of c.photos) { t.objectStore('photos').delete(p.id); t.objectStore('blobs').delete(p.id); t.objectStore('blobs').delete(p.id + '#ann'); }
   });
-  revokeThumbs(); cur = null; exportReady = null; reportReady = null; location.hash = '#/';
+  revokeThumbs(); cur = null; exportReady = null; reportReady = null; rptSel = null; rptOnlyNew = true; location.hash = '#/';
 }
 
 /* ---------------- Events ---------------- */
@@ -1455,17 +1486,40 @@ document.addEventListener('click', async e => {
       case 'shareZip': await shareZip(); break;
       case 'buildReport': {
         busy('Creating finding report …');
-        try { const blob = await buildReportPDF(c); reportReady = { sid: c.s.id, blob, name: reportName(c.s), url: URL.createObjectURL(blob) }; }
+        const sc = rptScope(c); if (!sc.fs.length) { busy(false); toast('No findings in this selection'); break; }
+        if (reportReady) URL.revokeObjectURL(reportReady.url);
+        try { const blob = await buildReportPDF(c, { findings: sc.fs, label: sc.label }); reportReady = { sid: c.s.id, blob, name: reportName(c.s, sc.part), url: URL.createObjectURL(blob), fids: sc.fs.map(f => f.id), part: sc.part }; }
         finally { busy(false); }
         render(); break;
       }
       case 'shareReport': {
         const x = reportReady, file = new File([x.blob], x.name, { type: 'application/pdf' });
-        try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: x.name }); else window.open(x.url, '_blank'); }
+        let done = false;
+        try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: x.name }); else window.open(x.url, '_blank'); done = true; }
         catch (err) { if (err.name !== 'AbortError') toast('Share failed: ' + err.message); }
+        if (done) { // erst nach erfolgreichem Teilen als gesendet markieren
+          const t = nowISO(); for (const f of c.findings) if (x.fids.includes(f.id) && !f.sentAt) { f.sentAt = t; await put('findings', f); }
+          if (x.part) c.s.reportSeq = Math.max(c.s.reportSeq || 0, x.part);
+          await touch(); render(); toast(`${x.fids.length} finding(s) marked as sent`);
+        }
         break;
       }
       case 'openReport': window.open(reportReady.url, '_blank'); break;
+      case 'rptDiscard': URL.revokeObjectURL(reportReady.url); reportReady = null; render(); break;
+      case 'rptNew': rptOnlyNew = d.v === '1'; rptSel = null; render(); break;
+      case 'rptAll': rptSel = null; render(); break;
+      case 'rptItem': case 'rptGrp': {
+        const ids = [...new Set(rptBase(c).map(f => f.itemId))], L = leaves(c.s).filter(l => ids.includes(l.id));
+        const tgt = a === 'rptItem' ? [d.v] : L.filter(l => (l.group ? l.group.id : l.id) === d.v).map(l => l.id);
+        const sel = rptSel ? new Set(rptSel) : new Set(ids), chk = el.checked;
+        for (const id of tgt) chk ? sel.add(id) : sel.delete(id);
+        rptSel = ids.every(id => sel.has(id)) ? null : sel; render(); break;
+      }
+      case 'rptResetSent': {
+        if (!confirm('Mark all findings as not shared? The next "Only new" report will contain all findings again.')) break;
+        for (const f of c.findings) if (f.sentAt) { f.sentAt = null; await put('findings', f); }
+        c.s.reportSeq = 0; await touch(); render(); break;
+      }
       case 'downloadZip': downloadZip(); break;
       case 'delSession': {
         const exp = c.s.exportedAt && c.s.modifiedAt <= c.s.exportedAt;

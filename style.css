@@ -139,3 +139,7 @@ textarea.inp{resize:vertical}
 .pre-sm{border-left:3px solid var(--line);padding:6px 0 6px 12px;margin:6px 0 10px}.pre-add{margin:4px 0 10px}.pre-b{font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;border:1px solid currentColor;opacity:.7}
 .sup .sup-r{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--line)}.sup .sup-r .grow{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sup{margin:2px 0 10px}
 .hints .wh{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px}.hints .wheels{margin:0;text-align:center}.hints .wheels svg{display:block;max-width:100%;height:auto}
+.rpt .rpt-sel{margin-top:6px}.rpt .rpt-sel summary{font-weight:600;padding:8px 0;cursor:pointer}
+.rpt .chk.rg{padding:8px 0;border-top:1px solid var(--line)}.rpt .chk.ri{padding:6px 0 6px 26px;font-weight:400}
+.rpt .chk input{width:20px;height:20px;flex:0 0 auto}
+.sent{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--okbg);color:var(--ok);margin-right:6px}

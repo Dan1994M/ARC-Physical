@@ -73,6 +73,16 @@ try {
   if (process.env.TEMPLATE_LIST) console.log(zt.join('\n'));
   ok(['.xlsx', '.pdf', 'Samples.xlsx', 'Findings.xlsx', 'Pruefprotokoll.html', 'session.json'].every(x => zt.some(f => f.endsWith(x))) && !zt.some(f => /\.jpe?g$/.test(f)) && zt.some(f => f.includes('/7 Finding Rectification Data/F01_')),
     `template ZIP: reports/tables/folders, no photos (${zt.length} entries)`);
+  // Teil-Report: zweites Finding (andere Kategorie), Auswahl, Teilen markiert als gesendet, danach nur neue
+  await pg.evaluate(() => busy(false)); await go('i/5.4.1'); await pg.click('[data-act=camFinding]'); await shot(); await pg.fill('[data-field=fText]', 'Gear finding'); await pg.waitForTimeout(600);
+  await pg.evaluate(() => { busy(false); navigator.canShare = () => true; navigator.share = async () => {}; });
+  await go('findings'); await pg.click('.rpt-sel summary'); await pg.click('[data-act=rptItem][data-v="5.4.1"]'); await pg.waitForTimeout(200);
+  ok(await pg.evaluate(() => rptScope(cur).fs.length === 1 && rptScope(cur).fs[0].itemId === '5.3.1'), 'report item selection filters findings');
+  await pg.click('[data-act=buildReport]'); await pg.waitForSelector('[data-act=shareReport]');
+  ok(await pg.evaluate(() => reportReady.name.includes('_Part 1') && !cur.findings.some(f => f.sentAt)), 'partial report named Part 1, nothing sent before share');
+  await pg.click('[data-act=shareReport]'); await pg.waitForTimeout(400);
+  ok(await pg.evaluate(() => cur.findings.filter(f => f.sentAt).length === 1 && cur.s.reportSeq === 1), 'share marks findings as sent');
+  ok(await pg.evaluate(() => { rptSel = null; const x = rptScope(cur); return x.fs.length === 1 && x.fs[0].itemId === '5.4.1' && x.part === 2; }), 'only new: next report = Part 2 with remaining finding');
 } catch (e) { ok(false, 'exception: ' + e.message); }
 ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 await b.close(); srv.close();
